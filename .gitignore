@@ -10,6 +10,8 @@ __pycache__/
 venv/
 .pytest_cache/
 .ruff_cache/
+.coverage
+htmlcov/
 
 # --- Project data (uploaded/generated invoices, local DB) ---
 data/*.db

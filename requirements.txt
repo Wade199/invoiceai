@@ -1,0 +1,28 @@
+# --- API ---
+fastapi>=0.115
+uvicorn[standard]>=0.32
+python-multipart>=0.0.12
+pydantic>=2.9
+pydantic-settings>=2.5
+python-dotenv>=1.0
+
+# --- UI ---
+streamlit>=1.39
+
+# --- Database ---
+sqlalchemy>=2.0
+
+# --- OCR / PDF ---
+pdfplumber>=0.11
+
+# --- LLM ---
+langchain-core>=0.3
+langchain-google-genai>=2.0
+tenacity>=9.0
+
+# --- Dev / test fixtures ---
+pytest>=8.3
+httpx>=0.27
+ruff>=0.7
+reportlab>=4.2
+faker>=30.0

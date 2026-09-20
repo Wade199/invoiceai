@@ -56,7 +56,7 @@ controls (see [`PROJECT_BRIEF.md`](PROJECT_BRIEF.md) §5):
 - Upload validation: max 10 MB, `application/pdf` MIME only
 - Configurable data retention (`DEFAULT_RETENTION_DAYS`) + `DELETE /invoice/{id}`
 - LLM output validated against arithmetic consistency rules before being trusted
-- Rate limiting + exponential backoff on the Gemini free tier (15 req/min)
+- Quota handling on the Gemini free tier (measured: 20 requests/day/model) + SHA-256 encrypted cache
 
 Full checklist: [`docs/security/SECURITY_CHECKLIST.md`](docs/security/SECURITY_CHECKLIST.md)
 

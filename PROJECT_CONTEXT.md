@@ -117,7 +117,7 @@ Voir [`DECISIONS.md`](DECISIONS.md) pour le détail. Résumé :
 
 - **Sécurité upload** : taille max 10 MB, MIME `application/pdf` uniquement
 - **RGPD** : rétention configurable (30j par défaut), endpoint `DELETE /invoice/{id}`
-- **Rate limiting** : Gemini free tier = 15 req/min → retry + cache SHA-256
+- **Rate limiting** : Gemini free tier = 20 requêtes/JOUR/modèle (mesuré 2026-09-20, pas 15/min) → cache SHA-256 chiffré, pas de retry sur quota journalier
 - **Fiabilité LLM** : validation arithmétique obligatoire (les LLM hallucinent des chiffres)
 - **Budget** : 0€ (free tier uniquement)
 - **Délai** : pas de deadline stricte, projet mené en parallèle de 2 autres

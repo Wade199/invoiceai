@@ -82,7 +82,7 @@ Ces sujets DOIVENT être adressés (souvent oubliés dans les prompts génériqu
 - Endpoint `DELETE /invoice/{id}` fonctionnel
 - Mention RGPD dans README + UI
 
-### 5.3 Rate limiting (Gemini free tier = 15 req/min)
+### 5.3 Rate limiting (Gemini free tier = 20 requêtes/jour/modèle — mesuré le 2026-09-20, corrige l'hypothèse initiale de 15 req/min)
 - Retry avec backoff exponentiel (`tenacity`)
 - Cache en mémoire (ou disque) : hash SHA-256 du PDF → JSON extrait
 - Message UI utilisateur si quota atteint

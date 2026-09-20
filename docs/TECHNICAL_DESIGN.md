@@ -112,7 +112,7 @@ InvoiceAIError (racine — tous les modules)
 │
 ├── LLMError (module LLM — P2)
 │   ├── ExtractionFailedError   # LLM a répondu mais parsing JSON KO
-│   ├── RateLimitError          # Quota Gemini atteint (15 req/min free)
+│   ├── RateLimitError          # Quota Gemini atteint (free tier mesuré : 20 req/JOUR/modèle)
 │   └── ProviderTimeoutError    # Gemini timeout
 │
 ├── ValidationError (module validation — P2)
@@ -139,8 +139,10 @@ InvoiceAIError (racine — tous les modules)
 class InvoiceAIError(Exception):
     """Base exception for all InvoiceAI errors."""
 
+
 class OCRError(InvoiceAIError):
     """Base for OCR module errors."""
+
 
 class PDFCorruptedError(OCRError):
     """Raised when a PDF file cannot be parsed."""
@@ -223,6 +225,7 @@ class ExtractedDocument:
         source_file: Chemin absolu du PDF source (traçabilité).
         metadata: Métadonnées PDF brutes (auteur, date création, producteur…).
     """
+
     text: str
     page_count: int
     source_file: Path
@@ -290,6 +293,10 @@ def extract_text_from_pdf(pdf_path: Path) -> ExtractedDocument:
 - [x] **Encodage** — vérifié : `pdfplumber` extrait correctement les accents (testé sur `Labbé`, code point `0xE9` confirmé). Le `�` observé pendant les tests manuels était un artefact d'affichage du terminal Windows (codepage), pas une corruption des données.
 - [x] **Métadonnées PDF** — gardé en V1 (`metadata: dict[str, str]`, coût nul, déjà dans le contrat validé). Aucun consommateur défini pour l'instant (LLM/DB arrivent en P2/P3) — à retirer si toujours inutilisé fin P3.
 
+### 1.4 bis Limites anti-DoS (revue sécurité)
+
+Un PDF est une entrée hostile. `extract_text_from_pdf` applique, avant tout envoi à Gemini : taille max (`MAX_UPLOAD_SIZE_MB`, 10), en-tête `%PDF-` obligatoire, pages max (`MAX_PDF_PAGES`, 30), texte max (`MAX_PDF_TEXT_CHARS`, 100 000) et **délai max `MAX_PDF_SECONDS` (20) avec un vrai kill** : l'analyse `pdfplumber` tourne dans un processus séparé (`spawn`) qu'on tue au timeout, et un crash du parseur est contenu. Dépassement → `PDFTooLargeError`. Une valeur de réglage invalide garde la valeur par défaut (jamais de limite désactivée par une faute de frappe). Mesuré : PDF de 200 pages refusé en 0,3 s ; PDF d'une page à 300 000 opérations (824 Ko) tué à 20 s. Contrainte : les scripts qui lancent l'extraction doivent être « import-safe » (`if __name__ == "__main__":`). Non couvert : plafond mémoire dans le processus enfant, et nombre de PDF traités en parallèle (à limiter en P3).
+
 ### 1.5 Ce qui est **hors scope** de ce module
 
 - ❌ OCR d'images (Tesseract, EasyOCR) → V2
@@ -316,7 +323,7 @@ class InvoiceLineItem(BaseModel):
 
 class ExtractedInvoice(BaseModel):
     invoice_number: str | None = None
-    date: str | None = None          # ISO 8601 (YYYY-MM-DD)
+    date: str | None = None  # ISO 8601 (YYYY-MM-DD)
     supplier: str | None = None
     client: str | None = None
     lines: list[InvoiceLineItem] = []
@@ -383,15 +390,15 @@ class ExtractedInvoice(BaseModel):
 
 | # | Choix | Pourquoi |
 |---|-------|----------|
-| 1 | 1 fichier JSON par hash dans `CACHE_DIR` (défaut `data/cache/`, gitignoré) | Le brief autorise « mémoire ou disque » ; le disque survit aux redémarrages Streamlit, sans dépendre de SQLAlchemy (pas encore en place). Migrable vers SQLite en P3 sans changer les 3 signatures |
+| 1 | 1 fichier `.enc` par hash dans `CACHE_DIR` (défaut `data/cache/`, gitignoré), **chiffré et authentifié (Fernet : AES + HMAC-SHA256)** avec `CACHE_ENCRYPTION_KEY` | Le cache contient des données personnelles : illisible sans la clé, toute modification est détectée. Sans clé → `StorageError` (jamais d'écriture en clair). Disque plutôt que SQLite : SQLAlchemy pas encore en place, signatures inchangées si migration en P3 |
 | 2 | Hash validé (`[0-9a-f]{64}`) avant de devenir un nom de fichier | Empêche le path traversal si un appelant passe une valeur venant de l'utilisateur |
 | 3 | Entrée corrompue / schéma obsolète = miss + suppression, pas d'exception | Pire cas = 1 appel Gemini de plus, jamais un crash |
 | 4 | Écriture atomique (fichier temporaire puis `os.replace`) | Un crash en cours d'écriture ne laisse jamais un JSON tronqué |
 | 5 | Erreurs d'E/S = `StorageError` (nouvelle branche de la hiérarchie) | Cohérent avec la hiérarchie `InvoiceAIError` |
 
-**Pas de TTL en V1** : la rétention RGPD (30 j) sera gérée avec la base en P3 ; d'ici là `delete_cached()` permet la suppression à la demande. Si le schéma `ExtractedInvoice` change, les anciennes entrées invalides sont ignorées, mais des entrées valides mais obsolètes (ex. prompt amélioré) resteraient servies : vider `data/cache/` après un changement de prompt.
+**Rétention RGPD (revue sécurité)** : durée de vie `CACHE_TTL_DAYS` (30 par défaut, une valeur invalide garde le défaut), horodatage **à l'intérieur** du jeton authentifié (toucher le fichier ne prolonge rien). Chaque entrée embarque son hash et est refusée si le fichier a été renommé sur un autre hash. Entrée expirée / altérée / clé différente → miss + suppression. `purge_expired()` (à appeler au démarrage / chaque jour en P3) supprime aussi les anciennes entrées `.json` en clair et les `.tmp` orphelins. Limites : la clé est dans `.env` sur la même machine (protège les sauvegardes et l'exfiltration du dossier, pas une machine compromise), pas de rotation de clé (MultiFernet) en V1. Vider `data/cache/` après un changement de prompt ou de règles de validation.
 
-**Tests** : `tests/unit/test_cache.py`, 13 cas (dossier temporaire via `CACHE_DIR`, aucun appel réseau).
+**Tests** : `tests/unit/test_cache.py`, ~25 cas (chiffrement sur disque, altération d'un bit, entrée déplacée, mauvaise clé, expiration, purge, accès concurrents, clé absente).
 
 ### 2.5 Orchestration — `src/services/pipeline.py` ✅
 

@@ -301,11 +301,74 @@ def extract_text_from_pdf(pdf_path: Path) -> ExtractedDocument:
 
 ## 2. Module LLM 🤖
 
-**Rôle** : envoyer le texte extrait à Gemini et récupérer les données structurées (fournisseur, dates, montants, lignes).
+**Rôle** : envoyer le texte extrait à Gemini et récupérer les données structurées (fournisseur, dates, montants, lignes), avec validation métier et cache.
+**Statut** : ⏳ En cours — sous-module 2.1 (schémas) implémenté, le reste à venir
 
-**Fichier** : `src/llm/extractor.py`
+### 2.1 Schémas de données — `src/models/schemas.py` ✅
 
-*Section vide — sera remplie à P2.*
+```python
+class InvoiceLineItem(BaseModel):
+    description: str
+    quantity: float
+    unit_price: float
+    total: float
+
+
+class ExtractedInvoice(BaseModel):
+    invoice_number: str | None = None
+    date: str | None = None          # ISO 8601 (YYYY-MM-DD)
+    supplier: str | None = None
+    client: str | None = None
+    lines: list[InvoiceLineItem] = []
+    subtotal_ht: float | None = None
+    tva_rate: float | None = None
+    total_ttc: float | None = None
+    extraction_confidence: Literal["high", "low"] = "high"
+    warnings: list[str] = []
+```
+
+**Choix de design** :
+| # | Choix | Décision | Pourquoi |
+|---|-------|----------|----------|
+| 1 | Tous les champs métier `\| None` | Le LLM peut retourner `null` plutôt qu'inventer une valeur (garde-fou anti-hallucination, cf. `PROJECT_BRIEF.md` §5.5) |
+| 2 | `Pydantic BaseModel` (pas dataclass) | Nécessaire pour `PydanticOutputParser` de LangChain (§2.2) — validation + parsing JSON automatique |
+| 3 | `extraction_confidence: Literal["high","low"]` | Posé par le LLM par défaut à `"high"`, repassé à `"low"` par le module de validation (§2.3) si incohérence détectée — pas d'exception levée, juste un flag consommé par l'UI |
+| 4 | Pas de champ `currency` en V1 | Hors scope V1 (`PROJECT_BRIEF.md` §9 — multi-devises reporté en V2) |
+
+### 2.2 Adapter Gemini — `src/llm/gemini_adapter.py` ✅
+
+**Implémenté** : `extract_invoice_data(document: ExtractedDocument) -> ExtractedInvoice`
+
+**Choix de design** :
+| # | Choix | Décision | Pourquoi |
+|---|-------|----------|----------|
+| 1 | `llm.with_structured_output(ExtractedInvoice)` plutôt que `PydanticOutputParser` manuel | Structured output natif de Gemini (function calling) — plus fiable qu'un parsing JSON texte fait à la main, moins de code |
+| 2 | Retry via `tenacity` sur `RateLimitError` + `ProviderTimeoutError` uniquement (pas `ExtractionFailedError`) | Erreurs transitoires (quota, indispo réseau) valent la peine d'être retentées ; un JSON malformé est un problème de prompt/schéma, pas résolu par un retry aveugle |
+| 3 | `_build_structured_llm()` isolée dans sa propre fonction | Permet de la monkeypatcher dans les tests sans mocker les internals de `langchain`/`google-genai` |
+| 4 | Backoff exponentiel `wait_exponential(multiplier=2, min=2, max=10)`, 3 tentatives max | Cohérent avec le rate limit Gemini (15 req/min = ~1 req/4s) sans faire attendre l'utilisateur trop longtemps |
+| 5 | `google.genai.errors.ClientError`/`ServerError` distingués par `.code` (429 → `RateLimitError`, autre 4xx → `ExtractionFailedError`, 5xx → `ProviderTimeoutError`) | Mapping direct des codes HTTP Gemini vers notre hiérarchie d'exceptions métier |
+
+**Prompt** : documenté séparément dans `docs/prompt_engineering.md` (garde-fous "if unsure, return null" + 1 exemple few-shot). **Testé et validé sur 5/5 factures fictives (100% de précision)**.
+
+**Tests** : `tests/unit/test_gemini_adapter.py`, 5 tests, aucun appel réel à Gemini (`_build_structured_llm` monkeypatché + `tenacity.nap.time.sleep` neutralisé pour éviter les vrais délais de retry en test).
+
+### 2.3 Validation métier — `src/services/validate_invoice.py` ⬜
+
+**Contrat prévu** : `validate_invoice(invoice: ExtractedInvoice) -> ExtractedInvoice`
+- Règle 1 : `sum(line.total for line in lines) ≈ subtotal_ht` (tolérance ±0,02 €)
+- Règle 2 : `subtotal_ht × (1 + tva_rate) ≈ total_ttc` (tolérance ±0,02 €)
+- Ne lève pas d'exception → passe `extraction_confidence = "low"` + ajoute un message dans `warnings` si incohérence
+
+*À détailler quand on code cette pièce.*
+
+### 2.4 Cache SHA-256 — `src/services/cache.py` ⬜
+
+**Contrat prévu** :
+- `get_cached(pdf_hash: str) -> ExtractedInvoice | None`
+- `store_cache(pdf_hash: str, invoice: ExtractedInvoice) -> None`
+- Clé = SHA-256 du contenu binaire du PDF (évite de rappeler Gemini sur un fichier déjà traité)
+
+*À détailler quand on code cette pièce.*
 
 ---
 

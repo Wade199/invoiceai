@@ -14,6 +14,7 @@ select = ["E", "F", "I", "UP", "B"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+addopts = "-m 'not slow'"
 markers = [
     "integration: several modules wired together, external APIs mocked",
     "slow: hits the real Gemini API (uses free-tier quota)",

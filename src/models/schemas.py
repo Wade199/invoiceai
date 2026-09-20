@@ -1,8 +1,28 @@
 from __future__ import annotations
 
-from typing import Literal
+from typing import Annotated, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import AfterValidator, BaseModel, Field, field_validator
+
+from src.core.sanitize import clean_text
+
+# The LLM output is UNTRUSTED (the PDF may have steered it, see docs/security): every string
+# is stripped of control / invisible characters and length-capped, every number is bounded
+# and finite, lists are capped. Anything outside these bounds fails validation.
+_MAX_AMOUNT = 1_000_000_000.0
+_MAX_LINES = 200
+
+
+def _safe(max_length: int):
+    return AfterValidator(lambda value: clean_text(value, max_length))
+
+
+ShortText = Annotated[str, _safe(100)]  # invoice number, date
+NameText = Annotated[str, _safe(200)]  # supplier, client
+DescriptionText = Annotated[str, _safe(500)]  # line description
+WarningText = Annotated[str, _safe(300)]
+
+Amount = Annotated[float, Field(allow_inf_nan=False, ge=-_MAX_AMOUNT, le=_MAX_AMOUNT)]
 
 
 class InvoiceLineItem(BaseModel):
@@ -15,10 +35,10 @@ class InvoiceLineItem(BaseModel):
         total: quantity * unit_price, excluding tax (HT).
     """
 
-    description: str
-    quantity: float
-    unit_price: float
-    total: float
+    description: DescriptionText
+    quantity: Amount
+    unit_price: Amount
+    total: Amount
 
 
 class ExtractedInvoice(BaseModel):
@@ -42,13 +62,23 @@ class ExtractedInvoice(BaseModel):
         warnings: Non-blocking messages about the extraction.
     """
 
-    invoice_number: str | None = None
-    date: str | None = None
-    supplier: str | None = None
-    client: str | None = None
+    invoice_number: ShortText | None = None
+    date: ShortText | None = None
+    supplier: NameText | None = None
+    client: NameText | None = None
     lines: list[InvoiceLineItem] = Field(default_factory=list)
-    subtotal_ht: float | None = None
-    tva_rate: float | None = None
-    total_ttc: float | None = None
+    subtotal_ht: Amount | None = None
+    # A rate is a fraction (0.20); 20 is tolerated here and flagged by validate_invoice.
+    tva_rate: Annotated[float, Field(allow_inf_nan=False, ge=0, le=100)] | None = None
+    total_ttc: Amount | None = None
     extraction_confidence: Literal["high", "low"] = "high"
-    warnings: list[str] = Field(default_factory=list)
+    warnings: list[WarningText] = Field(default_factory=list, max_length=50)
+
+    @field_validator("lines")
+    @classmethod
+    def _cap_lines(cls, lines: list[InvoiceLineItem]) -> list[InvoiceLineItem]:
+        # Not `Field(max_length=...)`: that adds "maxItems" to the JSON schema sent to Gemini,
+        # which rejects it on arrays of objects (400 INVALID_ARGUMENT, found on the real API).
+        if len(lines) > _MAX_LINES:
+            raise ValueError(f"more than {_MAX_LINES} invoice lines")
+        return lines

@@ -59,12 +59,12 @@ def test_store_overwrites_existing_entry(invoice: ExtractedInvoice) -> None:
 
 def test_store_leaves_no_temp_file(cache_dir: Path, invoice: ExtractedInvoice) -> None:
     cache.store_cache(HASH_A, invoice)
-    assert [p.name for p in cache_dir.iterdir()] == [f"{HASH_A}.json"]
+    assert [p.name for p in cache_dir.iterdir()] == [f"{HASH_A}.enc"]
 
 
 def test_corrupted_entry_is_a_miss_and_is_removed(cache_dir: Path) -> None:
     cache_dir.mkdir(parents=True)
-    entry = cache_dir / f"{HASH_A}.json"
+    entry = cache_dir / f"{HASH_A}.enc"
     entry.write_text("{not json", encoding="utf-8")
     assert cache.get_cached(HASH_A) is None
     assert not entry.exists()
@@ -110,4 +110,111 @@ def test_concurrent_stores_of_same_hash_do_not_corrupt_entry(
             future.result()  # re-raises any StorageError
 
     assert cache.get_cached(HASH_A) == invoice
-    assert [p.name for p in cache_dir.iterdir()] == [f"{HASH_A}.json"]
+    assert [p.name for p in cache_dir.iterdir()] == [f"{HASH_A}.enc"]
+
+
+# --- Confidentiality, integrity, retention (security review) ---------------------------------
+def test_entry_on_disk_is_encrypted(cache_dir: Path, invoice: ExtractedInvoice) -> None:
+    cache.store_cache(HASH_A, invoice)
+    raw = (cache_dir / f"{HASH_A}.enc").read_bytes()
+    assert b"ACME" not in raw and b"F-001" not in raw  # no personal data in clear text
+
+
+def test_missing_key_fails_closed(
+    invoice: ExtractedInvoice, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.delenv("CACHE_ENCRYPTION_KEY")
+    with pytest.raises(StorageError, match="CACHE_ENCRYPTION_KEY"):
+        cache.store_cache(HASH_A, invoice)
+    with pytest.raises(StorageError):
+        cache.get_cached(HASH_A)
+
+
+def test_invalid_key_rejected(invoice: ExtractedInvoice, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("CACHE_ENCRYPTION_KEY", "not-a-fernet-key")
+    with pytest.raises(StorageError, match="not a valid"):
+        cache.store_cache(HASH_A, invoice)
+
+
+def test_tampered_entry_is_rejected_and_deleted(cache_dir: Path, invoice: ExtractedInvoice) -> None:
+    cache.store_cache(HASH_A, invoice)
+    entry = cache_dir / f"{HASH_A}.enc"
+    data = bytearray(entry.read_bytes())
+    data[len(data) // 2] ^= 0x01  # flip one bit
+    entry.write_bytes(bytes(data))
+    assert cache.get_cached(HASH_A) is None
+    assert not entry.exists()
+
+
+def test_entry_copied_onto_another_hash_is_rejected(
+    cache_dir: Path, invoice: ExtractedInvoice
+) -> None:
+    """A valid entry renamed to another PDF's hash must not be served for that PDF."""
+    hash_b = "b" * 64
+    cache.store_cache(HASH_A, invoice)
+    (cache_dir / f"{HASH_A}.enc").rename(cache_dir / f"{hash_b}.enc")
+    assert cache.get_cached(hash_b) is None
+
+
+def test_entry_encrypted_with_another_key_is_a_miss(
+    invoice: ExtractedInvoice, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from cryptography.fernet import Fernet
+
+    cache.store_cache(HASH_A, invoice)
+    monkeypatch.setenv("CACHE_ENCRYPTION_KEY", Fernet.generate_key().decode())
+    assert cache.get_cached(HASH_A) is None
+
+
+def test_expired_entry_is_a_miss_and_is_deleted(
+    cache_dir: Path, invoice: ExtractedInvoice, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    cache.store_cache(HASH_A, invoice)
+    real_time = cache.time.time
+    monkeypatch.setattr(cache.time, "time", lambda: real_time() + 31 * 86_400)
+    assert cache.get_cached(HASH_A) is None
+    assert not (cache_dir / f"{HASH_A}.enc").exists()
+
+
+def test_entry_within_retention_is_served(
+    invoice: ExtractedInvoice, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    cache.store_cache(HASH_A, invoice)
+    real_time = cache.time.time
+    monkeypatch.setattr(cache.time, "time", lambda: real_time() + 29 * 86_400)
+    assert cache.get_cached(HASH_A) == invoice
+
+
+def test_retention_is_configurable_and_bad_value_keeps_default(
+    invoice: ExtractedInvoice, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("CACHE_TTL_DAYS", "1")
+    cache.store_cache(HASH_A, invoice)
+    real_time = cache.time.time
+    monkeypatch.setattr(cache.time, "time", lambda: real_time() + 2 * 86_400)
+    assert cache.get_cached(HASH_A) is None
+    monkeypatch.setenv("CACHE_TTL_DAYS", "garbage")
+    assert cache._ttl_seconds() == 30 * 86_400
+
+
+def test_purge_expired_removes_expired_invalid_and_legacy_files(
+    cache_dir: Path, invoice: ExtractedInvoice, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    hash_b, hash_c = "b" * 64, "c" * 64
+    cache.store_cache(HASH_A, invoice)  # will expire
+    real_time = cache.time.time
+    monkeypatch.setattr(cache.time, "time", lambda: real_time() + 20 * 86_400)
+    cache.store_cache(hash_b, invoice)  # stored "20 days from now": still fresh at +31 days
+    (cache_dir / f"{hash_c}.enc").write_bytes(b"garbage")  # invalid
+    (cache_dir / f"{HASH_A[:-1]}9.json").write_text('{"supplier": "plaintext"}')  # legacy
+    (cache_dir / "keep.txt").write_text("not ours")
+    monkeypatch.setattr(cache.time, "time", lambda: real_time() + 31 * 86_400)
+
+    deleted = cache.purge_expired()
+
+    assert deleted == 3
+    assert sorted(p.name for p in cache_dir.iterdir()) == sorted([f"{hash_b}.enc", "keep.txt"])
+
+
+def test_purge_on_missing_directory_is_a_noop() -> None:
+    assert cache.purge_expired() == 0

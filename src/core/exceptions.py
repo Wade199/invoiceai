@@ -21,6 +21,10 @@ class UnsupportedPDFError(OCRError):
     """Raised when a PDF appears to be a scanned image with no text layer."""
 
 
+class PDFTooLargeError(OCRError):
+    """Raised when a PDF exceeds the size / page / text / time limits (DoS protection)."""
+
+
 class LLMError(InvoiceAIError):
     """Base exception for the LLM module (src/llm)."""
 
@@ -34,7 +38,7 @@ class LLMAuthError(LLMError):
 
 
 class RateLimitError(LLMError):
-    """Raised when the Gemini free-tier rate limit (15 req/min) is exceeded."""
+    """Raised when a Gemini rate limit is exceeded (per-minute limits: retried with backoff)."""
 
 
 class ProviderTimeoutError(LLMError):
@@ -43,3 +47,10 @@ class ProviderTimeoutError(LLMError):
 
 class StorageError(InvoiceAIError):
     """Base exception for persistence (cache, database) failures."""
+
+
+class DailyQuotaExceededError(RateLimitError):
+    """Raised when the Gemini per-day quota is exhausted (free tier: 20 requests/day/model).
+
+    Retrying within seconds cannot help, so this one is never retried.
+    """

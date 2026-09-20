@@ -30,3 +30,25 @@ def test_extracted_invoice_rejects_invalid_confidence_value():
 def test_invoice_line_item_requires_all_fields():
     with pytest.raises(ValidationError):
         InvoiceLineItem(description="Missing numbers")
+
+
+def _walk(node):
+    """Yield every dict of a JSON schema, recursively."""
+    if isinstance(node, dict):
+        yield node
+        for value in node.values():
+            yield from _walk(value)
+    elif isinstance(node, list):
+        for value in node:
+            yield from _walk(value)
+
+
+def test_schema_sent_to_gemini_has_no_maxitems_on_object_arrays() -> None:
+    """Regression: Gemini answers 400 INVALID_ARGUMENT on `maxItems` for arrays of objects.
+
+    Found on the real API (mocked tests cannot see it); size caps go in validators instead.
+    """
+    schema = ExtractedInvoice.model_json_schema()
+    for node in _walk(schema):
+        if node.get("type") == "array" and "$ref" in node.get("items", {}):
+            assert "maxItems" not in node, node

@@ -1,18 +1,37 @@
 from __future__ import annotations
 
 import logging
+import multiprocessing
 import re
+from collections.abc import Callable
 from dataclasses import dataclass, field
+from multiprocessing.connection import Connection
 from pathlib import Path
+from typing import Any
 
 import pdfplumber
 
-from src.core.exceptions import EmptyDocumentError, PDFCorruptedError, UnsupportedPDFError
+from src.core.env import get_int_env
+from src.core.exceptions import (
+    EmptyDocumentError,
+    PDFCorruptedError,
+    PDFTooLargeError,
+    UnsupportedPDFError,
+)
 
 logger = logging.getLogger(__name__)
 
 _SCANNED_PDF_CHAR_THRESHOLD = 100
 _MANY_PAGES_THRESHOLD = 10
+
+# DoS limits (overridable through the environment, see .env.example). A malformed or
+# hostile PDF must not be able to exhaust CPU / memory or burn the Gemini quota.
+_DEFAULT_MAX_MB = 10
+_DEFAULT_MAX_PAGES = 30
+_DEFAULT_MAX_TEXT_CHARS = 100_000
+_DEFAULT_MAX_SECONDS = 20
+_PDF_MAGIC = b"%PDF-"
+_MAGIC_SEARCH_WINDOW = 1024  # the PDF spec allows a few junk bytes before the header
 _PAGE_SEPARATOR = "\n\n---PAGE {page_number}---\n\n"
 
 
@@ -52,19 +71,33 @@ def extract_text_from_pdf(pdf_path: Path) -> ExtractedDocument:
             (includes encrypted PDFs in V1).
         EmptyDocumentError: If the PDF is valid but contains zero extractable text.
         UnsupportedPDFError: If the PDF appears to be a scanned image (no text layer).
+        PDFTooLargeError: If the file is too big, has too many pages / too much text,
+            or parsing exceeds the time limit (DoS protection, see MAX_PDF_* settings).
     """
     if not pdf_path.exists():
         raise FileNotFoundError(f"PDF file not found: {pdf_path}")
 
+    _check_file(pdf_path)
+
     logger.info("Starting OCR extraction: %r", pdf_path)
 
-    try:
-        with pdfplumber.open(pdf_path) as pdf:
-            page_texts = [_clean_page_text(page.extract_text() or "") for page in pdf.pages]
-            page_count = len(pdf.pages)
-            raw_metadata = pdf.metadata or {}
-    except Exception as exc:
-        raise PDFCorruptedError(f"Cannot open PDF: {pdf_path}") from exc
+    # The parsing runs in a separate process: pdfplumber has no timeout, and a hostile PDF
+    # can hang or crash the parser. Killing a process is the only reliable way to stop it.
+    outcome = _run_isolated(
+        _read_pdf,
+        (
+            str(pdf_path),
+            get_int_env("MAX_PDF_PAGES", _DEFAULT_MAX_PAGES),
+            get_int_env("MAX_PDF_TEXT_CHARS", _DEFAULT_MAX_TEXT_CHARS),
+        ),
+        timeout=get_int_env("MAX_PDF_SECONDS", _DEFAULT_MAX_SECONDS),
+    )
+    status = outcome[0]
+    if status == "too_large":
+        raise PDFTooLargeError(f"PDF exceeds a limit ({outcome[1]}): {pdf_path}")
+    if status != "ok":
+        raise PDFCorruptedError(f"Cannot open PDF: {pdf_path}")
+    _, page_texts, page_count, raw_metadata = outcome
 
     warnings = _collect_warnings(page_texts, page_count)
     full_text = _join_pages(page_texts)
@@ -84,8 +117,84 @@ def extract_text_from_pdf(pdf_path: Path) -> ExtractedDocument:
         page_count=page_count,
         source_file=pdf_path,
         warnings=warnings,
-        metadata={str(key): str(value) for key, value in raw_metadata.items()},
+        metadata=raw_metadata,
     )
+
+
+def _check_file(pdf_path: Path) -> None:
+    """Cheap pre-checks (no parsing): size limit and PDF magic bytes."""
+    max_bytes = get_int_env("MAX_UPLOAD_SIZE_MB", _DEFAULT_MAX_MB) * 1024 * 1024
+    if pdf_path.stat().st_size > max_bytes:
+        raise PDFTooLargeError(f"PDF larger than {max_bytes // (1024 * 1024)} MB: {pdf_path}")
+    with pdf_path.open("rb") as file:
+        header = file.read(_MAGIC_SEARCH_WINDOW)
+    if _PDF_MAGIC not in header:
+        raise PDFCorruptedError(f"Not a PDF file (missing %PDF- header): {pdf_path}")
+
+
+def _read_pdf(path: str, max_pages: int, max_chars: int) -> tuple[Any, ...]:
+    """Parse the PDF and return plain picklable data. Runs in the child process.
+
+    Returns:
+        ("ok", page_texts, page_count, metadata) | ("too_large", reason) | ("corrupted",).
+    """
+    try:
+        with pdfplumber.open(path) as pdf:
+            page_count = len(pdf.pages)
+            if page_count > max_pages:
+                return ("too_large", f"{page_count} pages > {max_pages}")
+            page_texts: list[str] = []
+            total_chars = 0
+            for page in pdf.pages:
+                text = _clean_page_text(page.extract_text() or "")
+                total_chars += len(text)
+                if total_chars > max_chars:  # stop early: do not parse the remaining pages
+                    return ("too_large", f"more than {max_chars} characters")
+                page_texts.append(text)
+            metadata = {str(key): str(value) for key, value in (pdf.metadata or {}).items()}
+    except Exception:  # noqa: BLE001 - any parser failure means "not a usable PDF"
+        return ("corrupted",)
+    return ("ok", page_texts, page_count, metadata)
+
+
+def _child_main(conn: Connection, target: Callable[..., tuple[Any, ...]], args: tuple) -> None:
+    try:
+        conn.send(target(*args))
+    except BaseException:  # noqa: BLE001 - the parent must always receive an answer
+        conn.send(("corrupted",))
+    finally:
+        conn.close()
+
+
+def _run_isolated(
+    target: Callable[..., tuple[Any, ...]], args: tuple, timeout: int
+) -> tuple[Any, ...]:
+    """Run `target(*args)` in a fresh process and kill it after `timeout` seconds.
+
+    "spawn" (not fork) gives the child a clean interpreter on every OS. Note for callers:
+    scripts that start extraction must be import-safe (`if __name__ == "__main__":`).
+
+    Raises:
+        PDFTooLargeError: If the child did not answer in time (it is killed).
+        PDFCorruptedError: If the child died without answering (parser crash).
+    """
+    context = multiprocessing.get_context("spawn")
+    receiver, sender = context.Pipe(duplex=False)
+    process = context.Process(target=_child_main, args=(sender, target, args), daemon=True)
+    process.start()
+    sender.close()  # parent keeps only the receiving end, so a dead child gives EOFError
+    try:
+        if not receiver.poll(timeout):
+            raise PDFTooLargeError(f"PDF parsing exceeded {timeout} s and was aborted")
+        try:
+            return receiver.recv()
+        except EOFError as exc:
+            raise PDFCorruptedError("PDF parser crashed") from exc
+    finally:
+        if process.is_alive():
+            process.kill()
+        process.join(5)
+        receiver.close()
 
 
 def _clean_page_text(text: str) -> str:

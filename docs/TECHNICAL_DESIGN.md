@@ -391,6 +391,15 @@ class ExtractedInvoice(BaseModel):
 
 **Tests** : `tests/unit/test_cache.py`, 13 cas (dossier temporaire via `CACHE_DIR`, aucun appel réseau).
 
+### 2.5 Orchestration — `src/services/pipeline.py` ✅
+
+**Contrat** : `process_invoice(pdf_path: Path) -> ExtractedInvoice` — hash → cache → OCR → Gemini → validation → écriture cache.
+
+- Le résultat **validé** est mis en cache (un hit saute OCR, Gemini et validation). Si les règles de validation ou le prompt changent, vider `data/cache/`.
+- Aucune exception n'est attrapée : elles remontent (`OCRError`, `LLMError`, `StorageError`) et l'API/UI les traduit.
+- Une extraction en erreur n'est jamais mise en cache.
+- **Tests** : `tests/integration/test_pipeline.py` (marker `integration`, Gemini remplacé par un faux compteur d'appels) — vérifie facture valide, montants incohérents → `low`, 2ᵉ appel sans Gemini, erreur OCR propagée.
+
 ---
 
 ## 3. Modèle de données 🗃

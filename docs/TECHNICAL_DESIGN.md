@@ -370,14 +370,26 @@ class ExtractedInvoice(BaseModel):
 
 **Tests** : `tests/unit/test_validate_invoice.py`, 12 cas, 100 % de couverture du module.
 
-### 2.4 Cache SHA-256 — `src/services/cache.py` ⬜
+### 2.4 Cache SHA-256 — `src/services/cache.py` ✅
 
 **Contrat prévu** :
 - `get_cached(pdf_hash: str) -> ExtractedInvoice | None`
 - `store_cache(pdf_hash: str, invoice: ExtractedInvoice) -> None`
 - Clé = SHA-256 du contenu binaire du PDF (évite de rappeler Gemini sur un fichier déjà traité)
 
-*À détailler quand on code cette pièce.*
+**Implémenté** : `hash_pdf(path)`, `get_cached(hash)`, `store_cache(hash, invoice)`, `delete_cached(hash)` (ajouté pour le RGPD : le cache contient des données de facture).
+
+| # | Choix | Pourquoi |
+|---|-------|----------|
+| 1 | 1 fichier JSON par hash dans `CACHE_DIR` (défaut `data/cache/`, gitignoré) | Le brief autorise « mémoire ou disque » ; le disque survit aux redémarrages Streamlit, sans dépendre de SQLAlchemy (pas encore en place). Migrable vers SQLite en P3 sans changer les 3 signatures |
+| 2 | Hash validé (`[0-9a-f]{64}`) avant de devenir un nom de fichier | Empêche le path traversal si un appelant passe une valeur venant de l'utilisateur |
+| 3 | Entrée corrompue / schéma obsolète = miss + suppression, pas d'exception | Pire cas = 1 appel Gemini de plus, jamais un crash |
+| 4 | Écriture atomique (fichier temporaire puis `os.replace`) | Un crash en cours d'écriture ne laisse jamais un JSON tronqué |
+| 5 | Erreurs d'E/S = `StorageError` (nouvelle branche de la hiérarchie) | Cohérent avec la hiérarchie `InvoiceAIError` |
+
+**Pas de TTL en V1** : la rétention RGPD (30 j) sera gérée avec la base en P3 ; d'ici là `delete_cached()` permet la suppression à la demande. Si le schéma `ExtractedInvoice` change, les anciennes entrées invalides sont ignorées, mais des entrées valides mais obsolètes (ex. prompt amélioré) resteraient servies : vider `data/cache/` après un changement de prompt.
+
+**Tests** : `tests/unit/test_cache.py`, 13 cas (dossier temporaire via `CACHE_DIR`, aucun appel réseau).
 
 ---
 

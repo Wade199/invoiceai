@@ -35,3 +35,7 @@ class RateLimitError(LLMError):
 
 class ProviderTimeoutError(LLMError):
     """Raised when the Gemini API times out or is temporarily unavailable."""
+
+
+class StorageError(InvoiceAIError):
+    """Base exception for persistence (cache, database) failures."""

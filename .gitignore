@@ -26,3 +26,5 @@ data/*.pdf
 Thumbs.db
 .vscode/
 .idea/
+
+data/cache/

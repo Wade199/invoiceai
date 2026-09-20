@@ -348,6 +348,8 @@ class ExtractedInvoice(BaseModel):
 | 4 | Backoff exponentiel `wait_exponential(multiplier=2, min=2, max=10)`, 3 tentatives max | Cohérent avec le rate limit Gemini (15 req/min = ~1 req/4s) sans faire attendre l'utilisateur trop longtemps |
 | 5 | `google.genai.errors.ClientError`/`ServerError` distingués par `.code` (429 → `RateLimitError`, autre 4xx → `ExtractionFailedError`, 5xx → `ProviderTimeoutError`) | Mapping direct des codes HTTP Gemini vers notre hiérarchie d'exceptions métier |
 
+**Erreurs (corrigé après revue sécurité)** : `langchain-google-genai` re-lève les erreurs HTTP sous ses propres classes (`GoogleRateLimitError`, `GoogleAuthenticationError`…) qui **ne sont pas** des `ClientError`. Mapping actuel : 429 → `RateLimitError` (retry), 401/403 → `LLMAuthError` (jamais retry), autres 4xx → `ExtractionFailedError` (message sans le corps de la réponse), 5xx → `ProviderTimeoutError`. Clé absente → `LLMAuthError` (fail closed) ; `load_dotenv()` ne remplace pas les variables déjà définies. Voir `docs/security/P2_SECURITY_REVIEW.md`.
+
 **Prompt** : documenté séparément dans `docs/prompt_engineering.md` (garde-fous "if unsure, return null" + 1 exemple few-shot). **Testé et validé sur 5/5 factures fictives (100% de précision)**.
 
 **Tests** : `tests/unit/test_gemini_adapter.py`, 5 tests, aucun appel réel à Gemini (`_build_structured_llm` monkeypatché + `tenacity.nap.time.sleep` neutralisé pour éviter les vrais délais de retry en test).

@@ -352,14 +352,23 @@ class ExtractedInvoice(BaseModel):
 
 **Tests** : `tests/unit/test_gemini_adapter.py`, 5 tests, aucun appel réel à Gemini (`_build_structured_llm` monkeypatché + `tenacity.nap.time.sleep` neutralisé pour éviter les vrais délais de retry en test).
 
-### 2.3 Validation métier — `src/services/validate_invoice.py` ⬜
+### 2.3 Validation métier — `src/services/validate_invoice.py` ✅
 
 **Contrat prévu** : `validate_invoice(invoice: ExtractedInvoice) -> ExtractedInvoice`
 - Règle 1 : `sum(line.total for line in lines) ≈ subtotal_ht` (tolérance ±0,02 €)
 - Règle 2 : `subtotal_ht × (1 + tva_rate) ≈ total_ttc` (tolérance ±0,02 €)
 - Ne lève pas d'exception → passe `extraction_confidence = "low"` + ajoute un message dans `warnings` si incohérence
 
-*À détailler quand on code cette pièce.*
+**Implémenté** : 3 règles (ajout d'une règle 0 : `quantity × unit_price ≈ total` par ligne). Une règle est **ignorée** si une de ses entrées est `null` (un `null` du LLM est une réponse légitime, pas une incohérence). Fonction pure : retourne une copie (`model_copy`), l'entrée n'est pas mutée, les `warnings` existants sont conservés.
+
+| # | Choix | Pourquoi |
+|---|-------|----------|
+| 1 | Écart arrondi au centime avant comparaison | Bug trouvé par les tests : `abs(60.02 - 60.0)` = `0.0200000000000031` > 0.02 en float. `Decimal` écarté en V1 (le schéma est en `float`) |
+| 2 | Tolérance absolue 0,02 € | Couvre l'arrondi ligne par ligne ; pas de tolérance relative en V1 |
+
+**Incertitude ouverte** : `tva_rate` attendu en fraction (0.20). Si le LLM renvoie 20, la règle 3 lèvera un warning (faux positif visible, pas silencieux) — à surveiller sur factures réelles.
+
+**Tests** : `tests/unit/test_validate_invoice.py`, 12 cas, 100 % de couverture du module.
 
 ### 2.4 Cache SHA-256 — `src/services/cache.py` ⬜
 

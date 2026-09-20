@@ -3,11 +3,23 @@ from __future__ import annotations
 import logging
 import os
 
+from dotenv import load_dotenv
 from google.genai.errors import ClientError, ServerError
 from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_google_genai.chat_models import (
+    ChatGoogleGenerativeAIError,
+    GoogleAuthenticationError,
+    GooglePermissionDeniedError,
+    GoogleRateLimitError,
+)
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
-from src.core.exceptions import ExtractionFailedError, ProviderTimeoutError, RateLimitError
+from src.core.exceptions import (
+    ExtractionFailedError,
+    LLMAuthError,
+    ProviderTimeoutError,
+    RateLimitError,
+)
 from src.models.schemas import ExtractedInvoice
 from src.ocr.extractor import ExtractedDocument
 
@@ -66,7 +78,14 @@ def _build_structured_llm():
     Isolated in its own function so tests can monkeypatch it instead of
     mocking the langchain/google-genai internals directly.
     """
-    llm = ChatGoogleGenerativeAI(model=_MODEL_NAME, google_api_key=os.getenv("GOOGLE_API_KEY"))
+    # Does not override variables already set in the environment (e.g. real secrets
+    # injected by a deployment); only fills gaps from a local, gitignored .env.
+    load_dotenv()
+    api_key = os.getenv("GOOGLE_API_KEY")
+    if not api_key:
+        # Fail closed with a clear message instead of a cryptic error from the SDK.
+        raise LLMAuthError("GOOGLE_API_KEY is not set (see .env.example)")
+    llm = ChatGoogleGenerativeAI(model=_MODEL_NAME, google_api_key=api_key)
     return llm.with_structured_output(ExtractedInvoice)
 
 
@@ -87,6 +106,7 @@ def extract_invoice_data(document: ExtractedDocument) -> ExtractedInvoice:
         (unclear fields are left as None by the LLM, per the prompt's rules).
 
     Raises:
+        LLMAuthError: If the API key is missing, invalid or not permitted. Not retried.
         RateLimitError: If the Gemini free-tier quota (15 req/min) is hit.
             Retried automatically with exponential backoff before being raised.
         ProviderTimeoutError: If Gemini is unavailable or times out.
@@ -95,13 +115,23 @@ def extract_invoice_data(document: ExtractedDocument) -> ExtractedInvoice:
             ExtractedInvoice. Not retried (a malformed response is a prompt/
             schema issue, unlikely to be fixed by retrying blindly).
     """
-    logger.info("Starting LLM extraction: %s", document.source_file)
+    # %r escapes newlines: file names come from users and must not forge log lines.
+    logger.info("Starting LLM extraction: %r", document.source_file)
 
     structured_llm = _build_structured_llm()
     prompt = _EXTRACTION_PROMPT_TEMPLATE.format(text=document.text)
 
     try:
         result = structured_llm.invoke(prompt)
+    # langchain-google-genai re-raises HTTP errors as its own classes, which are NOT
+    # ClientError subclasses (429 -> GoogleRateLimitError, 401 -> GoogleAuthenticationError...).
+    # The specific ones must come first; the generic ChatGoogleGenerativeAIError last.
+    except GoogleRateLimitError as exc:
+        raise RateLimitError("Gemini rate limit exceeded (free tier: 15 req/min)") from exc
+    except (GoogleAuthenticationError, GooglePermissionDeniedError) as exc:
+        raise LLMAuthError("Gemini rejected the API key (invalid or not permitted)") from exc
+    except ChatGoogleGenerativeAIError as exc:
+        raise ExtractionFailedError(f"Gemini request failed: {type(exc).__name__}") from exc
     except ClientError as exc:
         if exc.code == _RATE_LIMIT_HTTP_CODE:
             raise RateLimitError("Gemini rate limit exceeded (free tier: 15 req/min)") from exc
@@ -112,6 +142,6 @@ def extract_invoice_data(document: ExtractedDocument) -> ExtractedInvoice:
     if not isinstance(result, ExtractedInvoice):
         raise ExtractionFailedError(f"Gemini returned an unexpected result type: {type(result)}")
 
-    logger.info("Finished LLM extraction: %s", document.source_file)
+    logger.info("Finished LLM extraction: %r", document.source_file)
 
     return result

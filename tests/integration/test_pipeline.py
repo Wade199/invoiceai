@@ -76,3 +76,27 @@ def test_ocr_error_propagates_and_nothing_is_cached(
         pipeline.process_invoice(corrupted)
     assert fake.calls == 0
     assert not (tmp_path / "cache").exists()
+
+
+def test_hostile_file_name_cannot_forge_log_lines(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """A file name with a newline must be escaped in logs (log injection)."""
+    import shutil
+
+    sample = Path(__file__).parent.parent / "fixtures" / "pdfs" / "sample_invoice.pdf"
+    evil = tmp_path / "x.pdf"  # Windows forbids \n in names: check the logging call directly
+    shutil.copy(sample, evil)
+    monkeypatch.setattr(pipeline, "extract_invoice_data", _FakeGemini(_invoice(120.0)))
+    pipeline.process_invoice(evil)  # populates the cache
+
+    class _FakePath:
+        name = "a.pdf\nFAKE LOG LINE: admin logged in"
+
+        def __getattr__(self, attr):
+            return getattr(evil, attr)
+
+    caplog.set_level("INFO")
+    pipeline.process_invoice(_FakePath())  # cache hit -> logs the (hostile) name
+    assert "\nFAKE LOG LINE" not in caplog.text
+    assert r"\nFAKE LOG LINE" in caplog.text  # escaped: backslash + "n", not a real newline

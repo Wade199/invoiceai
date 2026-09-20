@@ -96,3 +96,18 @@ def test_write_failure_raises_storage_error(
     monkeypatch.setenv("CACHE_DIR", str(blocker))
     with pytest.raises(StorageError):
         cache.store_cache(HASH_A, invoice)
+
+
+def test_concurrent_stores_of_same_hash_do_not_corrupt_entry(
+    cache_dir: Path, invoice: ExtractedInvoice
+) -> None:
+    """Two Streamlit sessions uploading the same PDF must not clobber each other's temp file."""
+    from concurrent.futures import ThreadPoolExecutor
+
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        futures = [pool.submit(cache.store_cache, HASH_A, invoice) for _ in range(40)]
+        for future in futures:
+            future.result()  # re-raises any StorageError
+
+    assert cache.get_cached(HASH_A) == invoice
+    assert [p.name for p in cache_dir.iterdir()] == [f"{HASH_A}.json"]

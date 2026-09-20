@@ -36,7 +36,7 @@ def process_invoice(pdf_path: Path) -> ExtractedInvoice:
 
     cached = get_cached(pdf_hash)
     if cached is not None:
-        logger.info("Cache hit for %s", pdf_path.name)
+        logger.info("Cache hit for %r", pdf_path.name)
         return cached
 
     document = extract_text_from_pdf(pdf_path)

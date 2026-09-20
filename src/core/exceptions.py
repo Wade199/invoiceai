@@ -29,6 +29,10 @@ class ExtractionFailedError(LLMError):
     """Raised when the LLM response cannot be parsed into the expected schema."""
 
 
+class LLMAuthError(LLMError):
+    """Raised when the API key is missing, invalid or lacks permission. Never retried."""
+
+
 class RateLimitError(LLMError):
     """Raised when the Gemini free-tier rate limit (15 req/min) is exceeded."""
 

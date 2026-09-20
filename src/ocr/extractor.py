@@ -56,7 +56,7 @@ def extract_text_from_pdf(pdf_path: Path) -> ExtractedDocument:
     if not pdf_path.exists():
         raise FileNotFoundError(f"PDF file not found: {pdf_path}")
 
-    logger.info("Starting OCR extraction: %s", pdf_path)
+    logger.info("Starting OCR extraction: %r", pdf_path)
 
     try:
         with pdfplumber.open(pdf_path) as pdf:
@@ -76,7 +76,7 @@ def extract_text_from_pdf(pdf_path: Path) -> ExtractedDocument:
         raise UnsupportedPDFError(f"PDF appears to be a scanned image: {pdf_path}")
 
     logger.info(
-        "Finished OCR extraction: %s (%d pages, %d chars)", pdf_path, page_count, len(full_text)
+        "Finished OCR extraction: %r (%d pages, %d chars)", pdf_path, page_count, len(full_text)
     )
 
     return ExtractedDocument(
@@ -107,7 +107,7 @@ def _collect_warnings(page_texts: list[str], page_count: int) -> list[str]:
         )
 
     for warning in warnings:
-        logger.warning(warning)
+        logger.warning("%s", warning)
 
     return warnings
 

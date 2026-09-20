@@ -5,7 +5,12 @@ from pathlib import Path
 import pytest
 from google.genai.errors import ClientError, ServerError
 
-from src.core.exceptions import ExtractionFailedError, ProviderTimeoutError, RateLimitError
+from src.core.exceptions import (
+    ExtractionFailedError,
+    LLMAuthError,
+    ProviderTimeoutError,
+    RateLimitError,
+)
 from src.llm import gemini_adapter
 from src.models.schemas import ExtractedInvoice
 from src.ocr.extractor import ExtractedDocument
@@ -96,3 +101,71 @@ def test_extract_invoice_data_retries_then_succeeds(monkeypatch):
 
     assert result is expected
     assert fake_llm.calls == 2
+
+
+# --- Errors as langchain-google-genai REALLY raises them ------------------------------
+# The library re-raises HTTP errors as its own classes (not ClientError subclasses), so the
+# tests above (raw ClientError) are not enough: build the errors through its own wrapper.
+
+
+def _langchain_error(code: int, message: str = "boom") -> Exception:
+    from google.genai.errors import ClientError as RawClientError
+    from langchain_google_genai.chat_models import _handle_client_error
+
+    try:
+        _handle_client_error(RawClientError(code, {"error": {"message": message}}), {"model": "m"})
+    except Exception as wrapped:  # noqa: BLE001 - we want whatever langchain raises
+        return wrapped
+    raise AssertionError("langchain did not raise")
+
+
+def test_real_langchain_429_maps_to_rate_limit_and_is_retried(monkeypatch):
+    fake_llm = _FakeStructuredLLM(error=_langchain_error(429), fail_times=99)
+    monkeypatch.setattr(gemini_adapter, "_build_structured_llm", lambda: fake_llm)
+
+    with pytest.raises(RateLimitError):
+        gemini_adapter.extract_invoice_data(_sample_document())
+
+    assert fake_llm.calls == 3  # retried up to _MAX_ATTEMPTS
+
+
+@pytest.mark.parametrize("code", [401, 403])
+def test_real_langchain_auth_errors_map_to_llm_auth_error_and_are_not_retried(monkeypatch, code):
+    fake_llm = _FakeStructuredLLM(error=_langchain_error(code), fail_times=99)
+    monkeypatch.setattr(gemini_adapter, "_build_structured_llm", lambda: fake_llm)
+
+    with pytest.raises(LLMAuthError):
+        gemini_adapter.extract_invoice_data(_sample_document())
+
+    assert fake_llm.calls == 1  # retrying a bad key only burns quota
+
+
+@pytest.mark.parametrize("code", [400, 404])
+def test_real_langchain_other_client_errors_map_to_extraction_failed(monkeypatch, code):
+    fake_llm = _FakeStructuredLLM(error=_langchain_error(code), fail_times=99)
+    monkeypatch.setattr(gemini_adapter, "_build_structured_llm", lambda: fake_llm)
+
+    with pytest.raises(ExtractionFailedError):
+        gemini_adapter.extract_invoice_data(_sample_document())
+
+    assert fake_llm.calls == 1
+
+
+def test_error_message_does_not_echo_provider_response(monkeypatch):
+    """The provider's error body could echo request data: keep it out of our message."""
+    secret = "SUPER-SECRET-INVOICE-CONTENT"
+    fake_llm = _FakeStructuredLLM(error=_langchain_error(400, secret), fail_times=99)
+    monkeypatch.setattr(gemini_adapter, "_build_structured_llm", lambda: fake_llm)
+
+    with pytest.raises(ExtractionFailedError) as excinfo:
+        gemini_adapter.extract_invoice_data(_sample_document())
+
+    assert secret not in str(excinfo.value)
+
+
+def test_missing_api_key_fails_closed_with_clear_error(monkeypatch):
+    monkeypatch.setattr(gemini_adapter, "load_dotenv", lambda: None)  # don't read the real .env
+    monkeypatch.delenv("GOOGLE_API_KEY", raising=False)
+
+    with pytest.raises(LLMAuthError, match="GOOGLE_API_KEY is not set"):
+        gemini_adapter._build_structured_llm()

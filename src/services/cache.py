@@ -4,6 +4,8 @@ import hashlib
 import logging
 import os
 import re
+import tempfile
+import time
 from pathlib import Path
 
 from pydantic import ValidationError
@@ -16,6 +18,7 @@ logger = logging.getLogger(__name__)
 _DEFAULT_CACHE_DIR = Path("data/cache")
 _SHA256_HEX = re.compile(r"[0-9a-f]{64}")
 _CHUNK_SIZE = 1024 * 1024
+_REPLACE_ATTEMPTS = 5
 
 
 def _cache_dir() -> Path:
@@ -45,6 +48,20 @@ def hash_pdf(pdf_path: Path) -> str:
         while chunk := file.read(_CHUNK_SIZE):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+def _replace_with_retry(source: str, destination: Path) -> None:
+    """`os.replace` with a short retry: on Windows it raises PermissionError when another
+    thread is replacing/reading the same file at that very instant. Entries are
+    content-addressed (same hash = same PDF), so retrying a few ms later is safe."""
+    for attempt in range(1, _REPLACE_ATTEMPTS + 1):
+        try:
+            os.replace(source, destination)
+            return
+        except PermissionError:
+            if attempt == _REPLACE_ATTEMPTS:
+                raise
+            time.sleep(0.01 * attempt)
 
 
 def get_cached(pdf_hash: str) -> ExtractedInvoice | None:
@@ -80,14 +97,21 @@ def store_cache(pdf_hash: str, invoice: ExtractedInvoice) -> None:
         StorageError: If the entry cannot be written.
     """
     path = _entry_path(pdf_hash)
-    tmp_path = path.with_suffix(".json.tmp")
+    tmp_name: str | None = None
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
-        # Write to a temp file then rename: a crash mid-write can never leave a
-        # half-written JSON that a later get_cached() would read.
-        tmp_path.write_text(invoice.model_dump_json(), encoding="utf-8")
-        os.replace(tmp_path, path)
+        # Write to a *unique* temp file then rename: a crash mid-write can never leave a
+        # half-written JSON, and two concurrent stores of the same hash (Streamlit
+        # threads) cannot clobber each other's temp file.
+        with tempfile.NamedTemporaryFile(
+            "w", encoding="utf-8", dir=path.parent, suffix=".tmp", delete=False
+        ) as tmp:
+            tmp_name = tmp.name
+            tmp.write(invoice.model_dump_json())
+        _replace_with_retry(tmp_name, path)
     except OSError as exc:
+        if tmp_name is not None:
+            Path(tmp_name).unlink(missing_ok=True)
         raise StorageError(f"Cannot write cache entry {path.name}: {exc}") from exc
 
 

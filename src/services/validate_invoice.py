@@ -66,7 +66,7 @@ def validate_invoice(invoice: ExtractedInvoice) -> ExtractedInvoice:
     if not new_warnings:
         return invoice.model_copy(deep=True)
 
-    logger.warning("Invoice %s failed validation: %s", invoice.invoice_number, new_warnings)
+    logger.warning("Invoice %r failed validation: %s", invoice.invoice_number, new_warnings)
     return invoice.model_copy(
         update={
             "extraction_confidence": "low",

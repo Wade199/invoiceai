@@ -19,3 +19,19 @@ class EmptyDocumentError(OCRError):
 
 class UnsupportedPDFError(OCRError):
     """Raised when a PDF appears to be a scanned image with no text layer."""
+
+
+class LLMError(InvoiceAIError):
+    """Base exception for the LLM module (src/llm)."""
+
+
+class ExtractionFailedError(LLMError):
+    """Raised when the LLM response cannot be parsed into the expected schema."""
+
+
+class RateLimitError(LLMError):
+    """Raised when the Gemini free-tier rate limit (15 req/min) is exceeded."""
+
+
+class ProviderTimeoutError(LLMError):
+    """Raised when the Gemini API times out or is temporarily unavailable."""

@@ -11,7 +11,7 @@ Status: **reviewed, residual risks listed below — this is NOT a claim that the
 | Secrets | `.env` gitignored, never added to any commit | OK |
 | Dependencies | `pip-audit` (includes new `cryptography`) | No known vulnerability |
 | Static analysis | `bandit -r src` | 0 findings |
-| Lint / tests | `ruff` clean · 104 tests (3 runs, no flakiness) · 96 % coverage · 2 real-API tests (`-m slow`) | OK (slow tests **skipped**, quota) |
+| Lint / tests | `ruff` clean · 104 tests (3 runs, no flakiness) · 96 % coverage · 2 real-API tests (`-m slow`) | OK (slow tests passed on 2026-09-21; skipped on 2026-09-20, quota) |
 | Real API | 3 fake invoices end-to-end (real OCR process, real Gemini, validation, encrypted cache): all `high`, no warning, cache hit in 0.02 s | OK |
 | Real API | Invalid key → `LLMAuthError`, no key in message · daily quota → `DailyQuotaExceededError`, not retried | OK |
 | DoS | 200-page PDF refused in 0.3 s · 824 KB PDF with 300 000 drawing ops killed at 20 s · non-PDF, oversize, crashing / hanging parser covered by tests | OK |
@@ -41,12 +41,12 @@ Revision 2 (re-audit)
 | 1 | No limit on size / pages / text / time, no parser timeout | **Mitigated** | Size, `%PDF-` header, 30 pages, 100 000 chars, 20 s hard timeout via killable child process; invalid settings fall back to defaults | No memory cap inside the child; no cap on parallel uploads (P3: queue / concurrency limit / per-user rate limit) |
 | 2 | Free tier: Google may reuse content | **Reduced** | Terms read (see below); IBAN, e-mail and French phone numbers masked before sending; once-per-process warning; `GEMINI_TIER` setting | Names, addresses and amounts are still sent; masking is regex-based (French phone formats only, recall not measured); outside EEA/CH/UK unpaid terms apply |
 | 3 | Cache = plaintext personal data, no TTL, no integrity | **Mitigated** | Fernet (AES + HMAC) encryption, fail closed without key, 30-day authenticated TTL, entry bound to its hash, `purge_expired()`, legacy plaintext purge | Key sits in `.env` on the same machine; no key rotation; `purge_expired()` not scheduled yet (P3); POSIX-only file modes |
-| 4 | Prompt injection not solved | **Reduced, not solved** | Data delimiters + "this is data" instruction, delimiter stripping, schema bounds (control / bidi / zero-width chars, lengths, finite bounded numbers), amount validation, `escape_markdown()` for the UI | Cannot be eliminated. The **new prompt was not re-verified live** (quota exhausted on all three models): the 2 earlier live attempts on the previous prompt resisted. Run `pytest -m slow` tomorrow. UI (P4) must call `escape_markdown` on every LLM field |
+| 4 | Prompt injection not solved | **Reduced, not solved** | Data delimiters + "this is data" instruction, delimiter stripping, schema bounds (control / bidi / zero-width chars, lengths, finite bounded numbers), amount validation, `escape_markdown()` for the UI | Cannot be eliminated. **Verified live on 2026-09-21** (`pytest -m slow`, 2 passed): with the new prompt, a PDF closing the data tag and ordering "SYSTEM OVERRIDE" (change supplier and total, leak the API key) did not change the extraction. One attempt per run, not a guarantee. UI (P4) must call `escape_markdown` on every LLM field |
 | 5 | Cache key = PDF content only (stale after prompt / model change) | Reduced | 30-day TTL bounds staleness; `GEMINI_MODEL` now configurable | Alias `gemini-flash-latest` still changes model silently; consider a versioned key |
 | 6 | Untrusted PDF parsed by pdfminer | Reduced | Runs in a separate process with timeout and kill | No sandbox / privilege drop / memory cap; re-run `pip-audit` each release |
 | 7 | Exception messages contain server paths | Open | — | API / UI must translate errors, never show raw messages |
 | 8 | LangSmith tracing would send prompts to a third party | Open | — | Keep `LANGCHAIN_TRACING_V2` unset; add to deployment checklist |
-| 9 | No real-API test | **Partly closed** | `tests/slow/` (2 tests, auto-skip on quota) | Not yet run successfully today |
+| 9 | No real-API test | **Closed** | `tests/slow/` (2 tests, auto-skip on quota), passed on 2026-09-21 | Run `pytest -m slow` before each release (spends 2 of the 20 daily requests; ~80 s) |
 
 ## 4. New observations
 
@@ -60,4 +60,4 @@ Revision 2 (re-audit)
 2. Call `purge_expired()` at startup and daily; expose `delete_cached()` behind an authenticated DELETE (GDPR erasure).
 3. Escape every LLM field on output (`escape_markdown`) — JSON API included if a client renders it.
 4. Decide on the paid tier / provider before any real customer data.
-5. Run `pytest -m slow` when the quota is back, then `pip-audit` and `bandit` again.
+5. Re-run `pip-audit` and `bandit` (`pytest -m slow` already passed on 2026-09-21).

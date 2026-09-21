@@ -295,7 +295,7 @@ def extract_text_from_pdf(pdf_path: Path) -> ExtractedDocument:
 
 ### 1.4 bis Limites anti-DoS (revue sécurité)
 
-Un PDF est une entrée hostile. `extract_text_from_pdf` applique, avant tout envoi à Gemini : taille max (`MAX_UPLOAD_SIZE_MB`, 10), en-tête `%PDF-` obligatoire, pages max (`MAX_PDF_PAGES`, 30), texte max (`MAX_PDF_TEXT_CHARS`, 100 000) et **délai max `MAX_PDF_SECONDS` (20) avec un vrai kill** : l'analyse `pdfplumber` tourne dans un processus séparé (`spawn`) qu'on tue au timeout, et un crash du parseur est contenu. Dépassement → `PDFTooLargeError`. Une valeur de réglage invalide garde la valeur par défaut (jamais de limite désactivée par une faute de frappe). Mesuré : PDF de 200 pages refusé en 0,3 s ; PDF d'une page à 300 000 opérations (824 Ko) tué à 20 s. Contrainte : les scripts qui lancent l'extraction doivent être « import-safe » (`if __name__ == "__main__":`). Non couvert : plafond mémoire dans le processus enfant, et nombre de PDF traités en parallèle (à limiter en P3).
+Un PDF est une entrée hostile. `extract_text_from_pdf` applique, avant tout envoi à Gemini : taille max (`MAX_UPLOAD_SIZE_MB`, 10), en-tête `%PDF-` obligatoire, pages max (`MAX_PDF_PAGES`, 30), texte max (`MAX_PDF_TEXT_CHARS`, 100 000) et **délai max `MAX_PDF_SECONDS` (20) avec un vrai kill** : l'analyse `pdfplumber` tourne dans un processus séparé, lancé comme une **commande indépendante** (`python -m src.ocr.worker`, réponse en JSON sur la sortie standard), qu'on tue au timeout ; un crash du parseur est contenu. Ce processus **ne reçoit pas les clés** (`GOOGLE_API_KEY`, `CACHE_ENCRYPTION_KEY`, `API_TOKEN`) dans son environnement. Dépassement → `PDFTooLargeError`. Une valeur de réglage invalide garde la valeur par défaut. Mesuré : PDF de 200 pages refusé en 0,3 s ; PDF d'une page à 300 000 opérations (824 Ko) tué à 20 s. **Pourquoi pas `multiprocessing`** : en mode `spawn` il relance le `__main__` du parent dans l'enfant ; sous Streamlit, un lanceur de tests ou un notebook, `__main__` est un autre script, que l'enfant réexécutait au lieu d'analyser le PDF (le parent attendait alors tout le délai). Plus aucune contrainte « import-safe » sur les scripts appelants. Non couvert : plafond mémoire du processus enfant, et nombre de PDF traités en parallèle (limité côté API).
 
 ### 1.5 Ce qui est **hors scope** de ce module
 
@@ -603,6 +603,19 @@ Navigateur ──► Streamlit (src/ui, 127.0.0.1:8501) ──HTTP + jeton──
 | 8 | `python scripts/run.py` (`src/launcher.py`) : vérifie clés, jeton et ports, lance l'API puis Streamlit sur `127.0.0.1`, arrête les deux | `make` n'existe pas sous Windows par défaut |
 | 9 | Le processus Streamlit reçoit `API_URL` mais **pas** `GOOGLE_API_KEY` ni `CACHE_ENCRYPTION_KEY` dans son environnement | Moindre privilège |
 | 10 | **Job Object Windows** « kill on close » (Linux : `PR_SET_PDEATHSIG`) | Sans lui, tuer ou fermer le lanceur laissait l'API (et ses clés en mémoire) tourner seule : défaut trouvé par le test réel |
+
+
+### 5.4 Écran Résultat (fait)
+
+| # | Choix | Pourquoi |
+|---|-------|----------|
+| 1 | Logique dans `result_logic.py` (conversion, validation, suppression), page fine (`pages/result.py`) | Testable sans navigateur |
+| 2 | Colonne gauche : fichier (`st.text`, littéral), date de traitement, **suppression automatique** (date et jours restants), fiabilité et avertissements **du serveur** | Remplace l'aperçu PDF écarté ; le serveur reste la source de vérité |
+| 3 | Formulaire (`st.form`) + tableau des lignes (`st.data_editor`, ajout / suppression de lignes) ; TVA saisie en **pourcentage** (20), envoyée en fraction (0,2) ; une valeur reçue en 20 ou 0,2 s'affiche 20 % | Ce que l'utilisateur attend ; l'API stocke des fractions |
+| 4 | Validation locale (date `AAAA-MM-JJ`, bornes, longueurs, désignation obligatoire, 200 lignes) avant l'envoi, avec des messages en français | Le serveur revalide (source de vérité) : la validation locale ne sert qu'à éviter un « Requête invalide » |
+| 5 | Le corps du `PUT` ne contient **que** les 8 champs modifiables ; la fiabilité est recalculée par le serveur | Un client ne peut pas se déclarer « fiable » |
+| 6 | Suppression : fenêtre de confirmation (`st.dialog`), puis `delete_invoice()` (ligne, cache, données du fichier) ; en cas d'échec la facture reste sélectionnée | Action irréversible ; `st.dialog` ne relance que son fragment, la logique est donc testée hors de la fenêtre |
+| 7 | Message « facture introuvable » (supprimée ou expirée) au lieu d'un plantage | La rétention de 30 jours peut retirer la facture pendant que la page est ouverte |
 
 ---
 

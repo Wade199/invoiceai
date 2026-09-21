@@ -71,5 +71,36 @@ Status: **reviewed per step, residual risks listed — NOT a claim that the inte
 | 6 | Not tested in a real browser (drag and drop, progress bar rendering) | Medium | Planned with the screenshots at the end of P4 |
 | 7 | Real Gemini through the UI not exercised (daily quota) | Medium | Task 19 |
 
+### Step 3 — Result page — 2026-09-21
+
+#### 1. What was verified
+
+| Area | Check | Result |
+|------|-------|--------|
+| Form logic | VAT rate 0.2 / 20 → shown as 20 %, sent as 0.2 (round trip through the **real API** leaves the data unchanged); untouched form sends back exactly what was received; only the 8 user-changeable fields are ever sent (never `extraction_confidence`, `warnings`, `id`, `pdf_hash`) | OK (unit + integration) |
+| Validation | Non-ISO dates, absurd / infinite / NaN amounts, VAT outside 0-100 %, too-long texts, empty or too-long line descriptions, non-numeric line values, > 200 lines: refused with a French message naming the line; all problems reported at once; credit notes (negative amounts) allowed | OK (41 unit tests) |
+| Contract | Five payload shapes the UI can build (credit note, no VAT, no lines, empty texts, VAT 5.5 %) are all accepted by the real API; after a correction the **server** recomputes reliability (a wrong TTC turns the record to "à vérifier" with the server's warning) | OK (integration) |
+| Page | No selected invoice → guidance; deleted / expired invoice → clear message and the selection is forgotten; API problems → message; left column shows file, dates, automatic deletion in N days, reliability, warnings; form filled from the record; save sends the right payload and confirms; invalid form explained and **not sent**; API refusal shown escaped | OK (AppTest) |
+| Injection | A hostile supplier and hostile warnings: the input shows the value literally, the warning message is escaped by `safe()`; a hostile API message is escaped | OK (AppTest) |
+| Deletion | Confirmation dialog explains what is erased; `delete_invoice` erases and forgets, a failure keeps the invoice selected and returns the message; real API: record really gone (404) | OK (unit + integration) |
+| Static / deps | `ruff`, `bandit` 0 findings, `pip-audit` no known vulnerability, 613 tests, 97 % coverage, `data/` untouched, no leftover process | OK |
+
+#### 2. Defects found and fixed
+
+1. **The PDF parser isolation broke whenever the caller's `__main__` was not an ordinary script.** It used `multiprocessing` in "spawn" mode, which re-imports the parent's `__main__` in the child. Streamlit (and test runners, notebooks) replace `__main__` with their own script: the child re-ran the Result page script (which crashed) instead of parsing, and the parent waited for the whole 20 s timeout — 8 OCR tests failed once the Result page tests had run first, and the full suite took 193 s instead of 35 s. Found by the full-suite run, not by the new tests. Fixed: the parser is an independent command (`python -m src.ocr.worker`, JSON on stdout), killed on timeout; regression test hijacks `__main__` and still extracts. Two extras: the parser process no longer inherits the Gemini / encryption / API secrets (tested), and PDF metadata sent back is bounded (100 entries × 1000 characters).
+2. The Upload page test that opens a result used a fake client without `get()`: now that the Result page is real, it calls it. Fake completed and the test also checks the record is shown.
+3. `bandit` "0 findings" claim of step 2 required annotating the two `subprocess` uses in the launcher; the extractor now has the same annotated pair (fixed argument list, no shell).
+
+#### 3. Residual risks
+
+| # | Risk | Severity | Note |
+|---|------|----------|------|
+| 1 | The delete dialog's confirm click could not be exercised end to end: Streamlit dialogs re-run only their own fragment and the test tool re-runs the whole page. The logic (`delete_invoice`) is tested directly and the dialog opening is tested | Medium | Check by hand in a browser |
+| 2 | `st.data_editor` cell editing is not simulated by the test tool: line editing is tested through the pure logic, not by typing in the table | Low | Check by hand |
+| 3 | Not tested in a real browser (form rendering, number inputs with empty values, dialog) | Medium | Planned with the screenshots at the end of P4 |
+| 4 | Two users editing the same invoice: last save wins, no version check | Low (single local user) | |
+| 5 | The parser worker inherits the rest of the environment (only the three secrets are removed) and can read the `.env` file as the same OS user | Low | A dedicated low-privilege account would be the real isolation |
+| 6 | `git`-ignored `.env` no longer holds `API_TOKEN` (removed today by the user); the launcher refuses to start until it is set | Info | See the launcher's message |
+
 ### 4. Next steps
 Upload page (progress, per-file errors, free-tier notice), Result page (editable form, delete with confirmation), History, Export (download warning). Each step re-runs the checks above and adds its own.

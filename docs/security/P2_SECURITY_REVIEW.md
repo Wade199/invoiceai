@@ -52,7 +52,7 @@ Revision 2 (re-audit)
 
 - **Google data terms** (ai.google.dev/gemini-api/terms, read 2026-09-20 through a summarising tool — re-read the page before relying on it): unpaid services — content is used to improve Google products and may be read by human reviewers; **if you are in the EEA, Switzerland or the UK, the paid-service terms apply to all services, including the free tier** (no product improvement, limited logging for abuse detection). The project owner is in France, so the current use is covered; users elsewhere are not.
 - **Free tier is 20 requests/day/model**: a demo / portfolio run must rely on the cache and on fake data; `process_invoice` takes 7–33 s per invoice on the free tier (UI must show progress).
-- `multiprocessing` "spawn": any script that triggers extraction must guard its entry point with `if __name__ == "__main__":`.
+- ~~`multiprocessing` "spawn": scripts must guard their entry point~~ — **superseded (2026-09-21)**: the parser now runs as an independent command (`python -m src.ocr.worker`) and no longer depends on the caller's `__main__`; it also no longer inherits the Gemini / encryption keys. See `P4_UI_REVIEW.md` step 3.
 
 ## 5. Before P3 (exposure to the network)
 

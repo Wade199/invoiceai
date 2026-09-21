@@ -16,6 +16,9 @@ class _HealthyClient:
     def check(self) -> None:
         return None
 
+    def list_invoices(self, **_kwargs) -> list:  # the History and Export pages list invoices
+        return []
+
 
 class _DownClient:
     def __init__(self, message: str) -> None:

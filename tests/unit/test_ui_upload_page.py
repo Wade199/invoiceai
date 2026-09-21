@@ -41,6 +41,9 @@ class FakeClient:
     def check(self) -> None:
         return None
 
+    def get(self, record_id: str) -> InvoiceView:  # the Result page loads the record
+        return _view()
+
     def upload(self, filename: str, data: bytes) -> InvoiceView:
         self.sent.append((filename, data))
         answer = self.answers.pop(0) if self.answers else _view()
@@ -180,3 +183,4 @@ def test_opening_a_result_remembers_it_and_goes_to_the_result_page(
     assert not app.exception
     assert app.session_state["current_record_id"] == RECORD_ID
     assert any("Résultat de l'extraction" in title.value for title in app.title)
+    assert any(field.value == "Orange SA" for field in app.text_input)  # the record is shown

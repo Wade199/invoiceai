@@ -4,6 +4,10 @@ import os
 
 from dotenv import load_dotenv
 
+# Secrets that only the API process needs: a process that parses hostile files, or the
+# interface, must not inherit them.
+SECRET_ENV_KEYS = ("GOOGLE_API_KEY", "CACHE_ENCRYPTION_KEY", "API_TOKEN")
+
 
 def load_env() -> None:
     """Load the local, gitignored `.env` without overriding real environment variables.

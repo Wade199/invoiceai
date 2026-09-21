@@ -1,17 +1,21 @@
 from __future__ import annotations
 
+import json
 import logging
-import multiprocessing
+import os
 import re
-from collections.abc import Callable
+
+# The parser runs as a separate command (see _run_isolated), never through a shell.
+import subprocess  # nosec B404
+import sys
+from collections.abc import Sequence
 from dataclasses import dataclass, field
-from multiprocessing.connection import Connection
 from pathlib import Path
 from typing import Any
 
 import pdfplumber
 
-from src.core.env import get_int_env
+from src.core.env import SECRET_ENV_KEYS, get_int_env
 from src.core.exceptions import (
     EmptyDocumentError,
     PDFCorruptedError,
@@ -32,6 +36,11 @@ _DEFAULT_MAX_TEXT_CHARS = 100_000
 _DEFAULT_MAX_SECONDS = 20
 _PDF_MAGIC = b"%PDF-"
 _MAGIC_SEARCH_WINDOW = 1024  # the PDF spec allows a few junk bytes before the header
+_PROJECT_ROOT = Path(__file__).resolve().parents[2]
+_WORKER_MODULE = "src.ocr.worker"
+_MAX_WORKER_OUTPUT = 5 * 1024 * 1024  # the worker's answer is already bounded: belt and braces
+_MAX_METADATA_ENTRIES = 100
+_MAX_METADATA_VALUE = 1000
 _PAGE_SEPARATOR = "\n\n---PAGE {page_number}---\n\n"
 
 
@@ -84,12 +93,12 @@ def extract_text_from_pdf(pdf_path: Path) -> ExtractedDocument:
     # The parsing runs in a separate process: pdfplumber has no timeout, and a hostile PDF
     # can hang or crash the parser. Killing a process is the only reliable way to stop it.
     outcome = _run_isolated(
-        _read_pdf,
-        (
+        _WORKER_MODULE,
+        [
             str(pdf_path),
-            get_int_env("MAX_PDF_PAGES", _DEFAULT_MAX_PAGES),
-            get_int_env("MAX_PDF_TEXT_CHARS", _DEFAULT_MAX_TEXT_CHARS),
-        ),
+            str(get_int_env("MAX_PDF_PAGES", _DEFAULT_MAX_PAGES)),
+            str(get_int_env("MAX_PDF_TEXT_CHARS", _DEFAULT_MAX_TEXT_CHARS)),
+        ],
         timeout=get_int_env("MAX_PDF_SECONDS", _DEFAULT_MAX_SECONDS),
     )
     status = outcome[0]
@@ -151,50 +160,59 @@ def _read_pdf(path: str, max_pages: int, max_chars: int) -> tuple[Any, ...]:
                 if total_chars > max_chars:  # stop early: do not parse the remaining pages
                     return ("too_large", f"more than {max_chars} characters")
                 page_texts.append(text)
-            metadata = {str(key): str(value) for key, value in (pdf.metadata or {}).items()}
+            metadata = {
+                str(key)[:_MAX_METADATA_VALUE]: str(value)[:_MAX_METADATA_VALUE]
+                for key, value in list((pdf.metadata or {}).items())[:_MAX_METADATA_ENTRIES]
+            }
     except Exception:  # noqa: BLE001 - any parser failure means "not a usable PDF"
         return ("corrupted",)
     return ("ok", page_texts, page_count, metadata)
 
 
-def _child_main(conn: Connection, target: Callable[..., tuple[Any, ...]], args: tuple) -> None:
-    try:
-        conn.send(target(*args))
-    except BaseException:  # noqa: BLE001 - the parent must always receive an answer
-        conn.send(("corrupted",))
-    finally:
-        conn.close()
+def _child_env() -> dict[str, str]:
+    """The environment of the parser: everything except the secrets it has no use for."""
+    child = {key: value for key, value in os.environ.items() if key not in SECRET_ENV_KEYS}
+    child["PYTHONIOENCODING"] = "utf-8"
+    return child
 
 
-def _run_isolated(
-    target: Callable[..., tuple[Any, ...]], args: tuple, timeout: int
-) -> tuple[Any, ...]:
-    """Run `target(*args)` in a fresh process and kill it after `timeout` seconds.
+def _run_isolated(module: str, args: Sequence[str], timeout: float) -> tuple[Any, ...]:
+    """Run `python -m <module> <args>` as a separate process, kill it after `timeout` seconds.
 
-    "spawn" (not fork) gives the child a clean interpreter on every OS. Note for callers:
-    scripts that start extraction must be import-safe (`if __name__ == "__main__":`).
+    A plain command, not `multiprocessing`: `multiprocessing` re-imports the parent's
+    `__main__` in the child, which breaks (or re-runs the wrong script) whenever the parent is
+    not an ordinary script, e.g. under Streamlit, a test runner or a notebook. The worker
+    prints its answer as JSON on stdout.
 
     Raises:
-        PDFTooLargeError: If the child did not answer in time (it is killed).
-        PDFCorruptedError: If the child died without answering (parser crash).
+        PDFTooLargeError: If the worker did not answer in time (it is killed).
+        PDFCorruptedError: If it crashed or answered nonsense.
     """
-    context = multiprocessing.get_context("spawn")
-    receiver, sender = context.Pipe(duplex=False)
-    process = context.Process(target=_child_main, args=(sender, target, args), daemon=True)
-    process.start()
-    sender.close()  # parent keeps only the receiving end, so a dead child gives EOFError
+    command = [sys.executable, "-m", module, *args]
     try:
-        if not receiver.poll(timeout):
-            raise PDFTooLargeError(f"PDF parsing exceeded {timeout} s and was aborted")
-        try:
-            return receiver.recv()
-        except EOFError as exc:
-            raise PDFCorruptedError("PDF parser crashed") from exc
-    finally:
-        if process.is_alive():
-            process.kill()
-        process.join(5)
-        receiver.close()
+        # The argument list is built from constants, integers and the file path (an argument,
+        # never a shell string): nothing user-controlled is interpreted.
+        completed = subprocess.run(  # nosec B603
+            command,
+            cwd=_PROJECT_ROOT,
+            env=_child_env(),
+            capture_output=True,
+            timeout=timeout,
+            check=False,
+        )
+    except subprocess.TimeoutExpired as exc:  # `run` has already killed the worker
+        raise PDFTooLargeError(f"PDF parsing exceeded {timeout} s and was aborted") from exc
+    if completed.returncode != 0:
+        raise PDFCorruptedError("PDF parser crashed")
+    if len(completed.stdout) > _MAX_WORKER_OUTPUT:
+        raise PDFCorruptedError("PDF parser answered with too much data")
+    try:
+        answer = json.loads(completed.stdout)
+    except ValueError as exc:
+        raise PDFCorruptedError("PDF parser gave no valid answer") from exc
+    if not isinstance(answer, list) or not answer:
+        raise PDFCorruptedError("PDF parser gave no valid answer")
+    return tuple(answer)
 
 
 def _clean_page_text(text: str) -> str:

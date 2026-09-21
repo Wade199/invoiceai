@@ -463,11 +463,46 @@ Fichier `.db` : permissions `0o600` sur POSIX (sans effet sous Windows). `git` l
 
 Excel `.xlsx` reporté. Revue : `docs/security/P3_EXPORT_REVIEW.md`.
 
-### 3.4 Routes (étape 3, à venir)
+### 3.4 Routes — `src/api/app.py`, `routes.py`, `schemas.py` (étape 3)
 
-`POST /invoices` (upload → extraction → validation → enregistrement → suppression du PDF), `GET /invoices`,
-`GET /invoices/{id}`, `PUT /invoices/{id}`, `DELETE /invoices/{id}`, `GET /invoices/export.csv`, `GET /health`.
-Toutes protégées par le jeton sauf `/health`. Pas d'aperçu du PDF ni de « Re-extraire » en V1 (le PDF n'est pas conservé).
+| Route | Rôle |
+|-------|------|
+| `POST /invoices` | PDF → upload sécurisé → extraction → validation → enregistrement → PDF supprimé. 201 + facture |
+| `GET /invoices` | Liste : `q`, `date_from`, `date_to`, `status`, `limit` (1-500), `offset` |
+| `GET /invoices/export.csv` | `ids` (≤ 200) **ou** filtres ; `kind` (`invoices`/`lines`), `columns`, `locale` |
+| `GET /invoices/{id}` | Détail (404 si inconnu ou expiré) |
+| `PUT /invoices/{id}` | Corrections utilisateur, revalidées par le serveur |
+| `DELETE /invoices/{id}` | Effacement RGPD (ligne + cache) : 204 |
+| `GET /health` | `{"status": "ok"}`, seule route sans jeton, aucune donnée |
+
+| # | Choix | Pourquoi |
+|---|-------|----------|
+| 1 | Jeton exigé sur tout le routeur (`Depends(require_token)`) sauf `/health` | Une route ajoutée plus tard est protégée par défaut |
+| 2 | `/docs`, `/redoc`, `/openapi.json` désactivés (sauf `API_DOCS=1`) | Ne pas publier la carte de l'API |
+| 3 | `TrustedHostMiddleware` : `Host` ∈ `ALLOWED_HOSTS` (défaut `127.0.0.1,localhost`) | Contre le DNS rebinding : une page web dont le domaine est redirigé vers 127.0.0.1 |
+| 4 | Pas de CORS | Aucune origine web n'a de raison d'appeler l'API |
+| 5 | En-têtes sur **toutes** les réponses (erreurs et 413 compris) : `Cache-Control: no-store`, `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer`, CSP `default-src 'none'` | Les réponses contiennent des données personnelles : ni cache navigateur ni proxy |
+| 6 | Ordre des middlewares (du dehors vers le dedans) : hôte → en-têtes → limite de taille | Un `Host` invalide est refusé avant tout ; le 413 porte aussi les en-têtes |
+| 7 | `PUT` : modèle dédié `extra="forbid"` avec seulement les champs modifiables ; `extraction_confidence` et `warnings` **recalculés** par `validate_invoice` | Sinon un client s'attribue « fiabilité élevée » (mass assignment) |
+| 8 | Réponses par modèles explicites : jamais `pdf_hash` | Détail interne |
+| 9 | Erreurs de validation 422 : seulement `loc` et `msg`, jamais la valeur reçue | Le comportement par défaut de FastAPI renvoie `input` |
+| 10 | `id` de chemin : UUID canonique en minuscules, sinon 422 | Rien d'autre ne peut être un de nos identifiants |
+| 11 | Extraction dans un thread (`run_in_threadpool`) ; routes de lecture en `def` (FastAPI les met dans un thread) | La boucle asynchrone ne doit jamais attendre Gemini (7-33 s) |
+| 12 | Limiteurs (fréquence, parallélisme) seulement sur `POST /invoices`, utilisés dans la boucle asynchrone | Ils ne sont pas thread-safe par conception (13a) |
+| 13 | Démarrage : refus de démarrer sans `API_TOKEN` valide ni clé de chiffrement valide ; purge des factures expirées, du cache et des uploads orphelins | Fail closed ; rétention appliquée sans attendre |
+| 14 | Lancement `--no-access-log` | Les recherches passent dans l'URL (`?q=Orange`) : le journal d'accès d'uvicorn écrirait des données personnelles |
+| 15 | Doublons : un même PDF envoyé deux fois crée deux factures (l'extraction, elle, vient du cache) | Simple ; l'utilisateur supprime |
+
+**Enseignements du test sur un vrai serveur (étape 3 terminée)**
+- Le cache est une optimisation : un échec d'**écriture** (disque, chemin Windows > 260 caractères) est journalisé et ignoré, sinon on perdait une réponse Gemini déjà payée en quota. Une clé absente/invalide échoue toujours **avant** l'appel à Gemini (fail closed).
+- Le gestionnaire d'erreurs journalise le **type** de l'exception et le code HTTP, jamais son message (chemins, contenu).
+- Un chemin de projet très profond peut dépasser `MAX_PATH` (260) sous Windows : cache et uploads deviennent inécrivables (500 « stockage »). Garder le projet près de la racine.
+- Lancement : `--no-access-log --no-server-header` (voir `make api`).
+
+Revue : `docs/security/P3_API_REVIEW.md`.
+
+Limites connues : la purge n'a lieu qu'au démarrage (la rétention est de toute façon appliquée à la lecture) ; pas de plafond
+global d'appels Gemini par jour (le 429 est traduit proprement).
 
 ---
 

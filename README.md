@@ -6,7 +6,7 @@
 Portfolio project by [Ibrahima](https://github.com/) — built while transitioning
 from Junior PHP/Symfony developer to AI Software Engineer.
 
-**Status**: 🚧 v0.2.1 — extraction pipeline done (OCR → Gemini → validation → encrypted cache, 104 tests); API, database and UI to come. See [`PROJECT_BRIEF.md`](PROJECT_BRIEF.md) for the full spec.
+**Status**: 🚧 API complete (extraction, encrypted storage, CSV export, 387 tests); Streamlit UI to come. See [`PROJECT_BRIEF.md`](PROJECT_BRIEF.md) for the full spec.
 
 ---
 
@@ -41,9 +41,12 @@ python -m venv .venv
 pip install -r requirements.txt
 
 copy .env.example .env        # then fill in GOOGLE_API_KEY
+python scripts/generate_cache_key.py   # -> CACHE_ENCRYPTION_KEY in .env (BACK IT UP)
+python scripts/generate_api_token.py    # -> API_TOKEN in .env
 python scripts/generate_fake_invoices.py   # generate 5 test PDFs in data/fake_invoices/
 
-make dev                      # run the Streamlit UI
+make api                      # run the REST API on 127.0.0.1:8000
+make dev                      # run the Streamlit UI (coming in P4)
 make test                     # run tests
 make lint                     # ruff check + format check
 ```
@@ -53,8 +56,16 @@ make lint                     # ruff check + format check
 This project handles invoice data (personal + accounting data). Non-negotiable
 controls (see [`PROJECT_BRIEF.md`](PROJECT_BRIEF.md) §5):
 
-- Upload validation: max 10 MB, `application/pdf` MIME only
-- Configurable data retention (`DEFAULT_RETENTION_DAYS`) + `DELETE /invoice/{id}`
+- **Local, single-user tool.** The API listens on `127.0.0.1` only and every route (except
+  `/health`) needs `Authorization: Bearer <API_TOKEN>`. **Do not expose it to the Internet
+  as is**: there are no user accounts and no TLS. Multi-user (accounts, TLS) is a V2 topic.
+- Upload validation: max 10 MB, `application/pdf` MIME **and** `%PDF-` bytes, server-generated
+  file names, the PDF is deleted as soon as it has been processed
+- Invoice data is encrypted at rest (Fernet) in the database and the cache; **lose
+  `CACHE_ENCRYPTION_KEY` = lose the history**
+- CSV export neutralises spreadsheet formulas (CSV injection)
+- Free-tier Gemini: use fake data unless you are in the EEA/CH/UK or on a paid plan
+- Configurable data retention (`DEFAULT_RETENTION_DAYS`, 30 days) + `DELETE /invoices/{id}` (record and cache)
 - LLM output validated against arithmetic consistency rules before being trusted
 - Quota handling on the Gemini free tier (measured: 20 requests/day/model) + SHA-256 encrypted cache
 
@@ -66,7 +77,7 @@ Full checklist: [`docs/security/SECURITY_CHECKLIST.md`](docs/security/SECURITY_C
 - [`PROJECT_CONTEXT.md`](PROJECT_CONTEXT.md) — living architecture/decisions doc
 - [`TASKS.md`](TASKS.md) — phase-by-phase backlog
 - [`DECISIONS.md`](DECISIONS.md) — decision log
-- [`projet-1-assistant-ia-factures.md`](projet-1-assistant-ia-factures.md) — original early-stage planning notes (superseded by `PROJECT_BRIEF.md`)
+- [`docs/security/`](docs/security/) — security reviews per phase (P2, P3)
 
 ## License
 

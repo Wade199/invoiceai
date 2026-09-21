@@ -54,3 +54,35 @@ class DailyQuotaExceededError(RateLimitError):
 
     Retrying within seconds cannot help, so this one is never retried.
     """
+
+
+class APIError(InvoiceAIError):
+    """Base exception for the API layer (src/api): uploads, auth, limits, configuration."""
+
+
+class UploadTooLargeError(APIError):
+    """Raised when an uploaded file exceeds MAX_UPLOAD_SIZE_MB."""
+
+
+class InvalidUploadError(APIError):
+    """Raised when an upload is not a non-empty PDF (wrong MIME type or magic bytes)."""
+
+
+class UploadRateLimitedError(APIError):
+    """Raised when a client sends too many uploads in a time window."""
+
+    def __init__(self, message: str, retry_after: int = 60) -> None:
+        super().__init__(message)
+        self.retry_after = retry_after
+
+
+class ServerBusyError(APIError):
+    """Raised when too many extractions are already running."""
+
+    def __init__(self, message: str, retry_after: int = 5) -> None:
+        super().__init__(message)
+        self.retry_after = retry_after
+
+
+class APIConfigError(APIError):
+    """Raised when the API is misconfigured (e.g. missing or too short API_TOKEN)."""

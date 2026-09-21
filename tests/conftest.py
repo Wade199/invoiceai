@@ -25,3 +25,11 @@ def _cache_encryption_key(monkeypatch: pytest.MonkeyPatch) -> str:
     key = Fernet.generate_key().decode()
     monkeypatch.setenv("CACHE_ENCRYPTION_KEY", key)
     return key
+
+
+@pytest.fixture(autouse=True)
+def upload_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """Uploads go to a per-test folder: tests never touch the real data/uploads."""
+    directory = tmp_path / "uploads"
+    monkeypatch.setenv("UPLOAD_DIR", str(directory))
+    return directory

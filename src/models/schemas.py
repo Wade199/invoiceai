@@ -10,7 +10,7 @@ from src.core.sanitize import clean_text
 # is stripped of control / invisible characters and length-capped, every number is bounded
 # and finite, lists are capped. Anything outside these bounds fails validation.
 _MAX_AMOUNT = 1_000_000_000.0
-_MAX_LINES = 200
+MAX_LINES = 200
 
 
 def _safe(max_length: int):
@@ -23,6 +23,8 @@ DescriptionText = Annotated[str, _safe(500)]  # line description
 WarningText = Annotated[str, _safe(300)]
 
 Amount = Annotated[float, Field(allow_inf_nan=False, ge=-_MAX_AMOUNT, le=_MAX_AMOUNT)]
+# A rate is a fraction (0.20); 20 is tolerated here and flagged by validate_invoice.
+Rate = Annotated[float, Field(allow_inf_nan=False, ge=0, le=100)]
 
 
 class InvoiceLineItem(BaseModel):
@@ -68,8 +70,7 @@ class ExtractedInvoice(BaseModel):
     client: NameText | None = None
     lines: list[InvoiceLineItem] = Field(default_factory=list)
     subtotal_ht: Amount | None = None
-    # A rate is a fraction (0.20); 20 is tolerated here and flagged by validate_invoice.
-    tva_rate: Annotated[float, Field(allow_inf_nan=False, ge=0, le=100)] | None = None
+    tva_rate: Rate | None = None
     total_ttc: Amount | None = None
     extraction_confidence: Literal["high", "low"] = "high"
     warnings: list[WarningText] = Field(default_factory=list, max_length=50)
@@ -79,6 +80,6 @@ class ExtractedInvoice(BaseModel):
     def _cap_lines(cls, lines: list[InvoiceLineItem]) -> list[InvoiceLineItem]:
         # Not `Field(max_length=...)`: that adds "maxItems" to the JSON schema sent to Gemini,
         # which rejects it on arrays of objects (400 INVALID_ARGUMENT, found on the real API).
-        if len(lines) > _MAX_LINES:
-            raise ValueError(f"more than {_MAX_LINES} invoice lines")
+        if len(lines) > MAX_LINES:
+            raise ValueError(f"more than {MAX_LINES} invoice lines")
         return lines

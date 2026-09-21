@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
+from src.core.exceptions import StorageError
 from src.llm.gemini_adapter import extract_invoice_data
 from src.models.schemas import ExtractedInvoice
 from src.ocr.extractor import extract_text_from_pdf
@@ -30,7 +31,8 @@ def process_invoice(pdf_path: Path) -> ExtractedInvoice:
         FileNotFoundError: If `pdf_path` does not exist.
         OCRError: If the PDF is corrupted, empty or a scanned image.
         LLMError: If the Gemini call fails (rate limit, timeout, bad response).
-        StorageError: If the cache cannot be read or written.
+        StorageError: If the cache cannot be read (or its key is missing / invalid).
+            A failure to WRITE the cache is logged and ignored.
     """
     pdf_hash = hash_pdf(pdf_path)
 
@@ -41,5 +43,11 @@ def process_invoice(pdf_path: Path) -> ExtractedInvoice:
 
     document = extract_text_from_pdf(pdf_path)
     invoice = validate_invoice(extract_invoice_data(document))
-    store_cache(pdf_hash, invoice)
+    try:
+        store_cache(pdf_hash, invoice)
+    except StorageError:
+        # The cache is an optimisation: a disk problem must not throw away an answer the LLM
+        # just gave (each call costs quota). A missing / invalid key never gets here: it
+        # already failed, before the LLM call, in get_cached().
+        logger.warning("Extraction of %r could not be cached", pdf_path.name)
     return invoice

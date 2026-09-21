@@ -100,3 +100,38 @@ def test_hostile_file_name_cannot_forge_log_lines(
     pipeline.process_invoice(_FakePath())  # cache hit -> logs the (hostile) name
     assert "\nFAKE LOG LINE" not in caplog.text
     assert r"\nFAKE LOG LINE" in caplog.text  # escaped: backslash + "n", not a real newline
+
+
+def test_a_cache_write_failure_does_not_lose_the_llm_answer(
+    sample_invoice_pdf: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Found on a real server: the cache could not be written (Windows path too long) and the
+    request failed AFTER Gemini had answered, wasting one of the 20 daily requests."""
+    from src.core.exceptions import StorageError
+
+    fake = _FakeGemini(_invoice(120.0))
+    monkeypatch.setattr(pipeline, "extract_invoice_data", fake)
+
+    def broken_store(_hash, _invoice):
+        raise StorageError("disk full")
+
+    monkeypatch.setattr(pipeline, "store_cache", broken_store)
+    caplog.set_level("WARNING")
+
+    result = pipeline.process_invoice(sample_invoice_pdf)
+
+    assert result.extraction_confidence == "high" and fake.calls == 1
+    assert "could not be cached" in caplog.text
+
+
+def test_a_missing_key_still_fails_before_the_llm_is_called(
+    sample_invoice_pdf: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from src.core.exceptions import StorageError
+
+    fake = _FakeGemini(_invoice(120.0))
+    monkeypatch.setattr(pipeline, "extract_invoice_data", fake)
+    monkeypatch.delenv("CACHE_ENCRYPTION_KEY")
+    with pytest.raises(StorageError):
+        pipeline.process_invoice(sample_invoice_pdf)
+    assert fake.calls == 0  # fail closed, and no quota spent

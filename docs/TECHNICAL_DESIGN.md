@@ -425,9 +425,43 @@ class ExtractedInvoice(BaseModel):
 
 **Rôle** : exposer les endpoints REST utilisés par l'UI.
 
-**Fichier** : `src/api/routes.py`
+**Fichier** : `src/api/routes.py` (13b, à venir) — voir ci-dessous la couche sécurité (13a).
 
-*Section vide — sera remplie à P3.*
+### 4.1 Modèle d'usage V1 : un seul utilisateur, en local (option A)
+
+L'API écoute **uniquement sur `127.0.0.1`** et exige un jeton (`Authorization: Bearer <API_TOKEN>`). Pas de comptes, pas de mots de passe : le jeton empêche un autre programme de la machine, ou un site web ouvert dans le navigateur qui appellerait `localhost`, d'utiliser l'API. **L'application ne doit pas être exposée sur Internet telle quelle** (à écrire dans le README). Passage futur à plusieurs utilisateurs (option B) : le jeton devient un identifiant et les factures se rattachent à lui, rien de ce qui suit n'est jeté.
+
+### 4.2 Sécurité de l'upload et de l'API (13a) — `src/api/`
+
+| Fichier | Contenu |
+|---------|---------|
+| `middleware.py` | `BodySizeLimitMiddleware` : coupe le corps de la requête au-delà de `MAX_UPLOAD_SIZE_MB` + `MULTIPART_MARGIN_BYTES` (64 Kio) |
+| `upload.py` | `save_upload(UploadFile) -> StoredUpload`, `delete_upload(path)`, `display_name(filename)` |
+| `security.py` | `require_token` (dépendance FastAPI), `ConcurrencyLimiter`, `SlidingWindowRateLimiter`, `to_http_error(exc)` |
+
+| # | Choix | Pourquoi |
+|---|-------|----------|
+| 1 | **Taille limitée à deux endroits** : (a) middleware ASGI qui compte les octets reçus ; (b) `save_upload` compte pendant l'écriture. Jamais de confiance en `Content-Length`. | Starlette lit **tout** le corps multipart dans un fichier temporaire *avant* que l'endpoint s'exécute : sans le middleware, un envoi de 5 Go est déjà sur disque quand on regarde la taille |
+| 2 | Nom de fichier **généré côté serveur** (`uuid4().hex + ".pdf"`), créé en mode exclusif, dans `UPLOAD_DIR` (défaut `data/uploads/`, gitignoré, jamais servi). Le nom d'origine ne sert qu'à l'affichage (`display_name` : basename, `clean_text`, 100 caractères). | Supprime `../`, noms réservés Windows, doubles extensions, collisions |
+| 3 | **Type vérifié deux fois** : MIME déclaré = `application/pdf` ET premiers octets = `%PDF-` (offset 0, plus strict que l'OCR). Fichier vide refusé. | Le MIME vient du client (falsifiable), les octets non |
+| 4 | Le PDF est **supprimé après traitement** (`finally`), y compris en cas d'erreur. | Minimisation RGPD : seul le résultat chiffré reste (cache). L'aperçu PDF de l'écran 2 devra s'en passer |
+| 5 | `ConcurrencyLimiter` (`MAX_CONCURRENT_EXTRACTIONS`, 2) : au-delà → 503 + `Retry-After`. Pas d'attente en file. | Chaque extraction lance un processus d'analyse PDF. Non thread-safe volontairement : utilisé uniquement dans la boucle asyncio |
+| 6 | `SlidingWindowRateLimiter` (`UPLOAD_RATE_LIMIT_PER_MINUTE`, 10) en mémoire, clé = adresse du client, nombre de clés plafonné. Horloge injectable pour les tests. | Freine le vidage du quota Gemini (20 req/jour/modèle). L'en-tête `X-Forwarded-For` n'est **pas** lu (falsifiable) |
+| 7 | **Jeton** : comparaison `hmac.compare_digest` (temps constant), minimum 32 caractères, **fail closed** : sans `API_TOKEN` valide, toute requête est refusée (500 de configuration, jamais d'accès ouvert). Généré par `scripts/generate_api_token.py`. | Un jeton court ou absent = une porte ouverte sans qu'on le voie |
+| 8 | `to_http_error(exc)` : `InvoiceAIError` → (code HTTP, message **fixe en français**, `Retry-After`). Le texte de l'exception (chemins serveur) n'est jamais renvoyé ; exception inconnue → 500 générique. | Point 7 de la revue P2 |
+
+Nouvelle branche d'exceptions : `APIError` → `UploadTooLargeError`, `InvalidUploadError`, `UploadRateLimitedError`, `ServerBusyError`, `APIConfigError`.
+
+**Incertitudes tranchées en codant (13a terminé)**
+- Marge multipart : 64 Kio (constante `MULTIPART_MARGIN_BYTES`).
+- Clé du rate limiter : adresse du socket (en local tout vient de `127.0.0.1`, la limite est donc globale, ce qui est voulu).
+- **Le middleware ne peut pas lever d'exception** : FastAPI transforme toute erreur levée pendant la lecture du corps en 400 générique. Technique retenue : au dépassement, l'application reçoit un faux `http.disconnect` (elle arrête de lire), sa réponse est jetée et le middleware répond lui-même 413. Trouvé par le test d'intégration.
+- **Le jeton est vérifié après la lecture du corps** (FastAPI lit le corps avant de résoudre les dépendances) : un appelant non authentifié peut faire lire au serveur jusqu'à la limite avant de recevoir le 401. Mesuré sur un vrai serveur : coupé à 1,8 Mo pour une limite de 1 Mo. Borné, accepté en V1 locale.
+- Plafond global d'appels Gemini par jour : reporté (13b), la `DailyQuotaExceededError` est déjà traduite en 429 propre.
+
+Le câblage (jeton + limiteurs + middleware + `delete_upload` en `finally` + `purge_stale_uploads()` au démarrage) sera fait dans les routes en 13b et à re-vérifier dans la revue de 13b. Revue de cette partie : `docs/security/P3_UPLOAD_SECURITY_REVIEW.md`.
+
+**Hors scope 13a** : les routes elles-mêmes, la base de données, l'UI (13b, 14, 15).
 
 ---
 

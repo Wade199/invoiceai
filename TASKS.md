@@ -7,12 +7,11 @@
 
 ## 🔥 En cours
 
-Prochaine étape : **P3 — API + persistance**, en commençant par la sécurité de l'upload (voir `docs/security/P2_SECURITY_REVIEW.md` §5).
+Prochaine étape : **P3 — API + persistance** (13b). La couche sécurité de l'upload (13a) est faite : `docs/security/P3_UPLOAD_SECURITY_REVIEW.md`.
 
 | # | Tâche | Priorité | Statut | Estimation |
 |---|-------|----------|--------|------------|
-| 13a | P3 — Sécurité upload : nom de fichier généré côté serveur, taille/MIME/magic bytes, limite de traitements parallèles, rate limit (ex-tâche #7) | High | 📋 TODO | 1j |
-| 13b | P3 — API REST FastAPI (upload/extract/history/export/delete) ; `purge_expired()` au démarrage, DELETE authentifié qui appelle `delete_cached()` | High | 📋 TODO | 2-3j |
+| 13b | P3 — API REST FastAPI (upload/extract/history/export/delete) : câbler middleware + jeton + limiteurs (`src/api/security.py`, `upload.py`), `purge_expired()` et `purge_stale_uploads()` au démarrage, DELETE authentifié qui appelle `delete_cached()`, cible `make api` (127.0.0.1) | High | 📋 TODO | 2-3j |
 | 14 | P3 — SQLAlchemy 2.x + SQLite (rétention RGPD 30 j) | High | 📋 TODO | 1j |
 
 ---
@@ -41,6 +40,7 @@ Prochaine étape : **P3 — API + persistance**, en commençant par la sécurit�
 | 10 | P2 — Adapter Gemini + prompt documenté (`docs/prompt_engineering.md`) | 2026-09-20 | Erreurs du SDK réel mappées, quota journalier géré |
 | 11 | P2 — Validation métier des montants (`validate_invoice.py`) | 2026-09-20 | |
 | 12 | P2 — Cache SHA-256 chiffré (Fernet, TTL 30 j) + `process_invoice` | 2026-09-20 | Le « rate limiting tenacity » est devenu : retry sur limite par minute, pas sur quota journalier (20 req/jour/modèle) |
+| 13a | P3 — Sécurité upload : middleware de taille, `save_upload`, jeton Bearer, limiteurs, traduction d'erreurs | 2026-09-21 | 209 tests ; revue : `docs/security/P3_UPLOAD_SECURITY_REVIEW.md` |
 | — | Revue sécurité P2 v2, tag `v0.2.1` | 2026-09-20 | `docs/security/P2_SECURITY_REVIEW.md` ; test injection sur API réelle validé le 2026-09-21 |
 
 ---

@@ -1,6 +1,9 @@
 # The API listens on 127.0.0.1 only (V1 = one local user): never expose it as is.
 # --no-access-log: searches travel in the URL (?q=Orange), the access log would record them.
-.PHONY: dev api test lint
+.PHONY: run dev api test lint
+
+run:
+	python scripts/run.py
 
 dev:
 	streamlit run src/ui/app.py

@@ -45,10 +45,10 @@ python scripts/generate_cache_key.py   # -> CACHE_ENCRYPTION_KEY in .env (BACK I
 python scripts/generate_api_token.py    # -> API_TOKEN in .env
 python scripts/generate_fake_invoices.py   # generate 5 test PDFs in data/fake_invoices/
 
-make api                      # run the REST API on 127.0.0.1:8000
-make dev                      # run the Streamlit UI (coming in P4)
-make test                     # run tests
-make lint                     # ruff check + format check
+python scripts/run.py         # start the API + the interface (Ctrl+C stops both)
+python -m pytest              # run tests
+# make api / make dev / make test are also available if `make` is installed
+python -m ruff check . && python -m ruff format --check .   # lint
 ```
 
 ## Security & GDPR

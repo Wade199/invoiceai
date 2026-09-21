@@ -415,9 +415,45 @@ class ExtractedInvoice(BaseModel):
 
 **Rôle** : schéma SQLite pour persister les factures traitées.
 
-**Fichier** : `src/models/invoice.py` + migrations.
+**Fichiers** : `src/models/invoice_record.py` (table), `src/core/database.py` (moteur, sessions),
+`src/core/crypto.py` (chiffrement partagé avec le cache), `src/services/repository.py` (accès aux données).
 
-*Section vide — sera remplie à P2/P3.*
+### 3.1 Table `invoices` (une seule en V1)
+
+| Colonne | Type | Clair / chiffré | Rôle |
+|---------|------|-----------------|------|
+| `id` | UUID (texte, PK) | clair | Identifiant non énumérable |
+| `created_at` | date UTC | clair | Date de traitement ; départ de la rétention |
+| `expires_at` | date UTC | clair | `created_at` + `DEFAULT_RETENTION_DAYS` (30) ; jamais prolongée par une modification |
+| `status` | `high` / `low` | clair | Fiabilité de l'extraction (contrainte CHECK) |
+| `pdf_hash` | SHA-256 (64 hex) | clair | Permet d'effacer aussi l'entrée du cache (RGPD) |
+| `schema_version` | entier | clair | Version du contenu chiffré, pour les évolutions |
+| `payload` | binaire | **chiffré (Fernet)** | Fournisseur, client, numéro, date, lignes, montants, avertissements, nom du fichier |
+
+### 3.2 Choix
+
+| # | Choix | Pourquoi |
+|---|-------|----------|
+| 1 | **Chiffrement par champ** (`payload`), pas SQLCipher | Le brief demande « SQLite chiffré » : SQLCipher est lourd à installer sous Windows. Ici un fichier `.db` copié sans la clé ne révèle ni nom, ni montant. Même clé que le cache (`CACHE_ENCRYPTION_KEY`), même trust boundary |
+| 2 | Le `payload` embarque l'`id` de la ligne, vérifié à la lecture | Une ligne copiée sur un autre `id` (déplacement de payload) est refusée, comme pour le cache |
+| 3 | Recherche / filtres **en mémoire** après déchiffrement | Les colonnes chiffrées ne s'interrogent pas en SQL ; quelques centaines de factures restent instantanées. `limit` plafonné (500) |
+| 4 | Dates stockées en **UTC** via un type dédié (`UTCDateTime`) | SQLite n'a pas de fuseau : sans ça on relit des dates « naïves » et on compare mal |
+| 5 | **Rétention appliquée aussi à la lecture** : une ligne expirée est traitée comme absente avant même la purge | La purge tourne au démarrage : une app ouverte 3 jours ne doit pas servir des données périmées |
+| 6 | `delete` efface le **cache d'abord**, puis la ligne | Si l'effacement du cache échoue on peut réessayer ; l'inverse laisserait une copie orpheline |
+| 7 | `PRAGMA secure_delete=ON` | Sinon SQLite laisse le contenu supprimé dans les pages libres du fichier : un `DELETE` RGPD ne supprimerait rien physiquement |
+| 8 | Ligne illisible (mauvaise clé, altérée) : ignorée dans la liste (avertissement), `StorageError` sur lecture directe, **purgée quand même à l'expiration** (colonnes en clair) | Une ligne corrompue ne doit ni planter la liste ni rester éternellement |
+| 9 | Pas de migrations (Alembic) en V1 : `create_all` + `schema_version` | Base locale mono-utilisateur ; à introduire dès que le schéma change après un vrai usage |
+| 10 | Date de filtre = date de la facture si elle est valide (ISO), sinon date de traitement | C'est la colonne « Date » de l'écran Historique |
+
+Fichier `.db` : permissions `0o600` sur POSIX (sans effet sous Windows). `git` l'ignore (`data/*.db*`).
+
+**Évolution option B (plusieurs utilisateurs)** : table `users` + colonne `user_id` sur `invoices`.
+
+### 3.3 Routes (étapes 2 et 3, à venir)
+
+`POST /invoices` (upload → extraction → validation → enregistrement → suppression du PDF), `GET /invoices`,
+`GET /invoices/{id}`, `PUT /invoices/{id}`, `DELETE /invoices/{id}`, `GET /invoices/export.csv`, `GET /health`.
+Toutes protégées par le jeton sauf `/health`. Pas d'aperçu du PDF ni de « Re-extraire » en V1 (le PDF n'est pas conservé).
 
 ---
 

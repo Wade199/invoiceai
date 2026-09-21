@@ -11,7 +11,7 @@ Prochaine étape : **P3 — API + persistance** (13b). La couche sécurité de l
 
 | # | Tâche | Priorité | Statut | Estimation |
 |---|-------|----------|--------|------------|
-| 13b | P3 — Étapes 2-3 : export CSV (`src/services/export.py`, neutralisation des formules) puis API REST FastAPI (upload/extract/history/export/delete) : câbler middleware + jeton + limiteurs (`src/api/security.py`, `upload.py`), `purge_expired()` et `purge_stale_uploads()` au démarrage, DELETE authentifié qui appelle `delete_cached()`, cible `make api` (127.0.0.1) | High | 📋 TODO | 2-3j |
+| 13b | P3 — Étape 3 : API REST FastAPI (upload/extract/history/export/delete) : câbler middleware + jeton + limiteurs (`src/api/security.py`, `upload.py`), `purge_expired()` et `purge_stale_uploads()` au démarrage, DELETE authentifié qui appelle `delete_cached()`, cible `make api` (127.0.0.1) | High | 📋 TODO | 2-3j |
 
 ---
 
@@ -41,6 +41,7 @@ Prochaine étape : **P3 — API + persistance** (13b). La couche sécurité de l
 | 12 | P2 — Cache SHA-256 chiffré (Fernet, TTL 30 j) + `process_invoice` | 2026-09-20 | Le « rate limiting tenacity » est devenu : retry sur limite par minute, pas sur quota journalier (20 req/jour/modèle) |
 | 13a | P3 — Sécurité upload : middleware de taille, `save_upload`, jeton Bearer, limiteurs, traduction d'erreurs | 2026-09-21 | 209 tests ; revue : `docs/security/P3_UPLOAD_SECURITY_REVIEW.md` |
 | 14 | P3 — Base SQLite + SQLAlchemy : table `invoices` (payload chiffré), dépôt `InvoiceRepository`, rétention 30 j, suppression cache + base | 2026-09-21 | 268 tests ; revue : `docs/security/P3_DATABASE_REVIEW.md` |
+| 13c | P3 — Export CSV (`src/services/export.py`) : factures + lignes, format Excel FR (`;`, virgule, BOM), neutralisation des formules | 2026-09-21 | 314 tests ; revue : `docs/security/P3_EXPORT_REVIEW.md` |
 | — | Revue sécurité P2 v2, tag `v0.2.1` | 2026-09-20 | `docs/security/P2_SECURITY_REVIEW.md` ; test injection sur API réelle validé le 2026-09-21 |
 
 ---

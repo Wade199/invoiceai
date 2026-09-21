@@ -449,7 +449,21 @@ Fichier `.db` : permissions `0o600` sur POSIX (sans effet sous Windows). `git` l
 
 **Évolution option B (plusieurs utilisateurs)** : table `users` + colonne `user_id` sur `invoices`.
 
-### 3.3 Routes (étapes 2 et 3, à venir)
+### 3.3 Export CSV — `src/services/export.py` (étape 2, fait)
+
+`invoices_csv(invoices, columns=..., locale="fr")` (une ligne par facture, colonnes choisies dans une liste autorisée, défaut = les 6 colonnes du wireframe), `lines_csv(invoices)` (une ligne par ligne de facturation), `suggested_filename(...)` (dates uniquement), `neutralize(text)`.
+
+| # | Choix | Pourquoi |
+|---|-------|----------|
+| 1 | Locale `fr` par défaut : séparateur `;`, virgule décimale, UTF-8 avec BOM ; variante `intl` | Excel en français ouvre un `,` sur une seule colonne et lit `120.00` comme du texte |
+| 2 | **Injection de formules** : toute cellule de texte commençant (après espaces) par `=`, `+`, `-`, `@`, ou par tabulation / retour chariot reçoit `'` devant | Un nom de fournisseur hostile suffit à planter une formule, voire `=cmd\|' /C calc'!A0` |
+| 3 | Les montants sont formatés par notre code, jamais préfixés | Un avoir en `-100,00` doit rester un nombre |
+| 4 | Montant TVA = TTC − HT (2 décimales), colonne vide si l'un manque | Le schéma ne stocke que le taux |
+| 5 | Nom de fichier construit avec des dates seulement | Jamais de texte venant de l'utilisateur dans `Content-Disposition` |
+
+Excel `.xlsx` reporté. Revue : `docs/security/P3_EXPORT_REVIEW.md`.
+
+### 3.4 Routes (étape 3, à venir)
 
 `POST /invoices` (upload → extraction → validation → enregistrement → suppression du PDF), `GET /invoices`,
 `GET /invoices/{id}`, `PUT /invoices/{id}`, `DELETE /invoices/{id}`, `GET /invoices/export.csv`, `GET /health`.

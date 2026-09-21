@@ -121,4 +121,5 @@ def create_app() -> FastAPI:
     return app
 
 
-app = create_app()
+# No module-level `app`: creating it at import time would read the real .env (every key)
+# into whatever process merely imports this module. Run it with `uvicorn --factory`.

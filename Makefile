@@ -6,7 +6,7 @@ dev:
 	streamlit run src/ui/app.py
 
 api:
-	uvicorn src.api.app:app --host 127.0.0.1 --port 8000 --no-access-log --no-server-header
+	uvicorn src.api.app:create_app --factory --host 127.0.0.1 --port 8000 --no-access-log --no-server-header
 
 test:
 	pytest -v

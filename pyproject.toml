@@ -15,6 +15,9 @@ select = ["E", "F", "I", "UP", "B"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-m 'not slow'"
+filterwarnings = [
+    "ignore:You should not use the 'timeout' argument with the TestClient",
+]
 markers = [
     "integration: several modules wired together, external APIs mocked",
     "slow: hits the real Gemini API (uses free-tier quota)",

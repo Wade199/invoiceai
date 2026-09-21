@@ -31,3 +31,5 @@ data/cache/
 data/uploads/
 
 data/*.db-*
+
+.env.ui

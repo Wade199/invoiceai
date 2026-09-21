@@ -5,3 +5,20 @@ backgroundColor = "#0E1117"
 secondaryBackgroundColor = "#1A1D24"
 textColor = "#FAFAFA"
 font = "sans serif"
+
+[server]
+# Local, single-user tool: never listen on the network.
+address = "127.0.0.1"
+# Same limit as the API (MAX_UPLOAD_SIZE_MB): Streamlit's default is 200 MB, held in memory.
+maxUploadSize = 10
+enableXsrfProtection = true
+enableCORS = true
+
+[browser]
+# No usage statistics sent to Streamlit.
+gatherUsageStats = false
+
+[client]
+# No stack traces (file paths, code) in the browser.
+showErrorDetails = "none"
+toolbarMode = "minimal"

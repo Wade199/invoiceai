@@ -588,6 +588,22 @@ Navigateur ──► Streamlit (src/ui, 127.0.0.1:8501) ──HTTP + jeton──
 
 **Tests** : `AppTest` (Streamlit) par page avec un faux client injecté via `services.get_client` ; `ApiClient` testé contre la **vraie** application FastAPI en mémoire, et contre des transports simulés pour les erreurs.
 
+
+### 5.3 Écran Upload et lanceur (fait)
+
+| # | Choix | Pourquoi |
+|---|-------|----------|
+| 1 | Logique d'envoi séparée de l'affichage (`upload_logic.py`), page fine (`pages/upload.py`) | Testable sans navigateur ; la page ne fait que brancher les widgets |
+| 2 | Fichiers envoyés **un par un**, jamais en parallèle ; 10 fichiers max par lot | Quota Gemini (20/jour/modèle) et limite de parallélisme du serveur (2) |
+| 3 | Pré-contrôles avant envoi (vide, > 10 Mo, signature `%PDF-`) : fichier « ignoré » sans requête | Ne pas dépenser une requête pour ce que le serveur refuserait ; le serveur reste juge |
+| 4 | Une erreur qui toucherait **tous** les fichiers (401, 429, 5xx sauf 502, API injoignable) arrête le lot : les suivants sont « non traités » | Pas de quota ni de temps gaspillés ; 502 et les 4xx concernent un seul document |
+| 5 | Nom de fichier et texte extrait passent par `safe()` avant tout affichage Markdown | Un nom ou un fournisseur hostile ne devient jamais du balisage |
+| 6 | Résultats gardés dans `st.session_state` ; le sélecteur est vidé en changeant sa clé | Les résultats survivent aux rechargements ; pas de renvoi involontaire des mêmes fichiers |
+| 7 | Encadré « Confidentialité et limites » toujours visible (suppression du PDF, masquage IBAN/e-mail/téléphone, quota, politique de données du plan gratuit) | L'utilisateur sait ce qui part chez Google avant d'envoyer |
+| 8 | `python scripts/run.py` (`src/launcher.py`) : vérifie clés, jeton et ports, lance l'API puis Streamlit sur `127.0.0.1`, arrête les deux | `make` n'existe pas sous Windows par défaut |
+| 9 | Le processus Streamlit reçoit `API_URL` mais **pas** `GOOGLE_API_KEY` ni `CACHE_ENCRYPTION_KEY` dans son environnement | Moindre privilège |
+| 10 | **Job Object Windows** « kill on close » (Linux : `PR_SET_PDEATHSIG`) | Sans lui, tuer ou fermer le lanceur laissait l'API (et ses clés en mémoire) tourner seule : défaut trouvé par le test réel |
+
 ---
 
 ## 📝 Journal des mises à jour

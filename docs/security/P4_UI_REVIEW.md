@@ -38,5 +38,38 @@ Status: **reviewed per step, residual risks listed — NOT a claim that the inte
 | 6 | Not tested in a real browser (rendering, XSRF cookie, upload limit at the browser) | Medium | Planned with the screenshots at the end of P4 |
 | 7 | `st.file_uploader` keeps uploaded bytes in memory until the session ends | Low | Limited to 10 MB per file by `maxUploadSize` |
 
+### Step 2 — Upload page and one-command launcher — 2026-09-21
+
+#### 1. What was verified
+
+| Area | Check | Result |
+|------|-------|--------|
+| Batch logic | Files sent one at a time; 10 per batch max (the rest reported, never sent); empty / > 10 MB / no `%PDF-` signature skipped **without a request**; an error that would hit every file (401, 429, 5xx except 502, API down) stops the batch and the rest is "not run", never sent; a 4xx or 502 about one document does not stop the others; a programming error is not swallowed | OK (unit) |
+| Against the real API | Mixed batch (valid, fake PDF, 3 MB file refused by a 1 MB server limit): 1 honest outcome per file, only the valid ones stored; rate limit at 2 → 2 stored, the error carries its retry delay, the last files are "not run"; wrong token → configuration hint | OK (integration) |
+| Page | Privacy and limits notice shown before any upload; button disabled without a file; result line with supplier, euro amount and reliability; extraction warnings shown; the selection is emptied after a batch; results survive reruns and can be cleared; "Voir le résultat" remembers the record and switches page | OK (AppTest) |
+| Injection | A hostile **file name** and a hostile **supplier** (`![x](...)`, `<img onerror>`, `<script>`) and a hostile **API message** reach the page escaped; no `<script>` / `<img` survives | OK (AppTest) |
+| Launcher | Preflight names each missing / weak setting **without printing any value**; refuses a used port; both commands bind `127.0.0.1` only, with `--no-access-log --no-server-header`; the interface process does not inherit the Gemini and encryption keys | OK (tests) |
+| Launcher, real | `python scripts/run.py` really starts both servers (API protected: 401 without token), and both **disappear** when the launcher is killed abruptly | OK (integration) |
+| End to end, real | Real launcher + real API + the UI's batch logic: the daily-quota refusal from Google arrives as "Quota d'analyse du jour atteint, réessayez demain.", the second file is not sent | OK (real Gemini itself not reachable: quota) |
+| Static / deps | `ruff`, `pip-audit` no known vulnerability; `bandit`: 2 low findings in the launcher (`subprocess` import and `Popen`), reviewed and annotated: fixed argument list, no shell, no user input | OK |
+
+#### 2. Defects found and fixed
+
+1. **Killing the launcher left the servers running** (found by the real test, whose failed first run left orphans that I then stopped by hand): closing the terminal or `taskkill` skip the launcher's cleanup, and the API — which holds the Gemini and encryption keys in memory — kept running unattended. Fixed with a Windows Job Object flagged "kill on close" (Linux: `PR_SET_PDEATHSIG`); the real test now checks that both ports are closed after a hard kill.
+2. A test asserted a hostile file name containing `/`; Streamlit itself refuses such names (no operating system allows `/` in a file name). Test uses a realistic hostile name.
+3. Parametrised test ids built from 10 MB of bytes made pytest overflow Windows' 32,767-character environment-variable limit at teardown. Explicit ids.
+
+#### 3. Residual risks
+
+| # | Risk | Severity | Note |
+|---|------|----------|------|
+| 1 | **A failing extraction blocks the page for ~40 s** (the Google SDK retries a 429 by itself before giving up): the spinner runs, then the message appears | Low (UX) | Could be shortened by an early quota check |
+| 2 | macOS has no equivalent of the kill-on-close guard: a hard-killed launcher would leave the servers running | Low | Normal exit and Ctrl+C are cleaned up on every platform |
+| 3 | The Job Object could not be assigned if the launcher already runs inside a restrictive job (rare) | Low | A warning is printed in that case |
+| 4 | File bytes are read into memory (`getvalue()`) for each selected file: up to 10 × 10 MB | Low | Streamlit's own upload limit is 10 MB per file |
+| 5 | The notice about the free-tier data policy is static text: it does not know which plan the API really uses | Low | Kept deliberately cautious |
+| 6 | Not tested in a real browser (drag and drop, progress bar rendering) | Medium | Planned with the screenshots at the end of P4 |
+| 7 | Real Gemini through the UI not exercised (daily quota) | Medium | Task 19 |
+
 ### 4. Next steps
 Upload page (progress, per-file errors, free-tier notice), Result page (editable form, delete with confirmation), History, Export (download warning). Each step re-runs the checks above and adds its own.

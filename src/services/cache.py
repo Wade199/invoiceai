@@ -12,7 +12,8 @@ from pathlib import Path
 from cryptography.fernet import Fernet, InvalidToken
 from pydantic import ValidationError
 
-from src.core.env import get_int_env, load_env
+from src.core.crypto import get_cipher
+from src.core.env import get_int_env
 from src.core.exceptions import StorageError
 from src.models.schemas import ExtractedInvoice
 
@@ -31,25 +32,6 @@ _REPLACE_ATTEMPTS = 5
 def _cache_dir() -> Path:
     # Read at call time (not import time) so tests / deployments can override it.
     return Path(os.getenv("CACHE_DIR", str(_DEFAULT_CACHE_DIR)))
-
-
-def _fernet() -> Fernet:
-    """Build the cipher from CACHE_ENCRYPTION_KEY.
-
-    Fernet = AES-128-CBC + HMAC-SHA256: entries are both confidential AND tamper-proof,
-    and carry an authenticated timestamp used for the retention limit.
-    Fails closed: without a key we refuse to write personal data in clear text.
-    """
-    load_env()
-    key = os.getenv("CACHE_ENCRYPTION_KEY")
-    if not key:
-        raise StorageError(
-            "CACHE_ENCRYPTION_KEY is not set (generate one with scripts/generate_cache_key.py)"
-        )
-    try:
-        return Fernet(key.encode())
-    except (ValueError, TypeError) as exc:
-        raise StorageError("CACHE_ENCRYPTION_KEY is not a valid Fernet key") from exc
 
 
 def _ttl_seconds() -> int:
@@ -120,7 +102,7 @@ def get_cached(pdf_hash: str) -> ExtractedInvoice | None:
         StorageError: If the key is missing/invalid or the entry cannot be read.
     """
     path = _entry_path(pdf_hash)
-    cipher = _fernet()
+    cipher = get_cipher()
     try:
         token = path.read_bytes()
     except FileNotFoundError:
@@ -156,7 +138,7 @@ def store_cache(pdf_hash: str, invoice: ExtractedInvoice) -> None:
         StorageError: If the key is missing/invalid or the entry cannot be written.
     """
     path = _entry_path(pdf_hash)
-    cipher = _fernet()
+    cipher = get_cipher()
     payload = json.dumps({"hash": pdf_hash, "invoice": invoice.model_dump(mode="json")})
     token = cipher.encrypt(payload.encode("utf-8"))
 
@@ -212,7 +194,7 @@ def purge_expired() -> int:
     directory = _cache_dir()
     if not directory.is_dir():
         return 0
-    cipher = _fernet()
+    cipher = get_cipher()
     deleted = 0
     for entry in directory.iterdir():
         try:

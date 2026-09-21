@@ -33,3 +33,22 @@ def upload_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     directory = tmp_path / "uploads"
     monkeypatch.setenv("UPLOAD_DIR", str(directory))
     return directory
+
+
+@pytest.fixture(autouse=True)
+def database_url(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    """A throw-away SQLite file per test; connections are released so Windows can clean up."""
+    from src.core.database import dispose_engines
+
+    url = f"sqlite:///{(tmp_path / 'test.db').as_posix()}"
+    monkeypatch.setenv("DATABASE_URL", url)
+    yield url
+    dispose_engines()
+
+
+@pytest.fixture(autouse=True)
+def _isolated_cache_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """Cache entries go to a per-test folder: tests never write into the real data/cache."""
+    directory = tmp_path / "cache"
+    monkeypatch.setenv("CACHE_DIR", str(directory))
+    return directory

@@ -617,6 +617,21 @@ Navigateur ──► Streamlit (src/ui, 127.0.0.1:8501) ──HTTP + jeton──
 | 6 | Suppression : fenêtre de confirmation (`st.dialog`), puis `delete_invoice()` (ligne, cache, données du fichier) ; en cas d'échec la facture reste sélectionnée | Action irréversible ; `st.dialog` ne relance que son fragment, la logique est donc testée hors de la fenêtre |
 | 7 | Message « facture introuvable » (supprimée ou expirée) au lieu d'un plantage | La rétention de 30 jours peut retirer la facture pendant que la page est ouverte |
 
+
+### 5.5 Écrans Historique et Export (faits)
+
+| # | Choix | Pourquoi |
+|---|-------|----------|
+| 1 | Logique séparée (`history_logic.py`, `export_logic.py`), pages fines | Testable sans navigateur |
+| 2 | Historique : filtres (recherche, période, fiabilité) envoyés à l'API ; 500 lignes max avec avertissement ; tableau `st.dataframe` à sélection multiple, **cellules en texte littéral** | La recherche se fait côté serveur (les champs sont chiffrés) ; un fournisseur hostile ne devient jamais du balisage |
+| 3 | Actions sur la sélection : **Ouvrir** (une seule), **Exporter** (passe les identifiants à la page Export), **Supprimer** | Parcours du wireframe |
+| 4 | Suppression en lot avec **confirmation sur la page** (avertissement + « Oui, supprimer » / « Annuler »), pas de fenêtre ; les identifiants à supprimer sont fixés au premier clic | Une fenêtre `st.dialog` ne relance que son fragment (non testable) ; fixer les identifiants évite de supprimer une autre sélection si elle change entre-temps |
+| 5 | `delete_many` : un 404 compte comme fait ; une erreur qui toucherait toutes les factures (401, 429, 5xx, API arrêtée) arrête le lot, le reste est « non traité » ; la facture affichée sur l'écran Résultat est oubliée si elle est supprimée | Compte rendu honnête, pas de rafale d'erreurs identiques |
+| 6 | Export : CSV seulement (`.xlsx` indiqué comme non disponible) ; contenu (factures / lignes), format des nombres (Excel français / international), factures (sélection de l'historique / période et fiabilité), colonnes au choix | Wireframe adapté à ce que l'API sait faire |
+| 7 | Les clés de colonnes de l'interface sont **comparées à celles du serveur par un test** ; la limite de 200 identifiants aussi | Une dérive entre les deux côtés fait échouer la suite |
+| 8 | Deux temps : « Préparer le fichier » puis « Télécharger » ; le fichier préparé est lié à la demande exacte (changer un choix l'invalide) et **oublié dès le clic sur Télécharger** | Pas d'appel à l'API à chaque rechargement ; pas de fichier périmé ; données personnelles en clair non conservées en mémoire |
+| 9 | Avertissement permanent près du téléchargement : le fichier sort du chiffrement et de la suppression automatique | Risque résiduel #9 de la revue de l'API |
+
 ---
 
 ## 📝 Journal des mises à jour

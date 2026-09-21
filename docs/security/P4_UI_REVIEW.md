@@ -102,5 +102,38 @@ Status: **reviewed per step, residual risks listed — NOT a claim that the inte
 | 5 | The parser worker inherits the rest of the environment (only the three secrets are removed) and can read the `.env` file as the same OS user | Low | A dedicated low-privilege account would be the real isolation |
 | 6 | `git`-ignored `.env` no longer holds `API_TOKEN` (removed today by the user); the launcher refuses to start until it is set | Info | See the launcher's message |
 
+### Step 4 — History and Export pages — 2026-09-21
+
+#### 1. What was verified
+
+| Area | Check | Result |
+|------|-------|--------|
+| History table | French formats, dash for missing values, hostile supplier / file name stay **plain text** in the table, empty list keeps its columns, selected positions map to the right ids (out-of-range ignored) | OK (unit + real API) |
+| Filters | Search (trimmed), period, reliability reach the real search and give the right rows; 500-row limit flagged; empty history / no match / API problem each have their own message | OK (AppTest + real API) |
+| Bulk delete | Nothing is erased before confirmation; confirmation names the count; confirm erases exactly the pending ids and reports; cancel erases nothing; a missing invoice counts as done; a problem with one invoice does not stop the others; an error that would hit every invoice (401, 429, 5xx, API down) stops the run and the rest is "not attempted"; the invoice open on the Result page is forgotten if erased; real API: records really gone | OK |
+| Export request | At least one column, known columns only, no reversed period, selection between 1 and 200 ids (same limit as the API, **compared by a test**), duplicates removed, a selection sends ids and **no** filters | OK (unit) |
+| Contract with the server | The UI's column keys and labels are **identical** to the backend's allowlist; every column the page offers is accepted by the real API in both number formats | OK (unit + integration) |
+| Export page | Preview count, prepare then download offered with the file name from the server, warning about leaving the encryption, changing any choice invalidates the prepared file, lines file has no column choice, selection from the history used and droppable, API refusal shown escaped | OK (AppTest) |
+| Whole chain | A supplier corrected to `=cmd|' /C calc'!A0`, exported through the UI logic and the real API, comes out as `'=cmd|...` | OK (integration) |
+| Static / deps | `ruff`, `bandit` 0 findings, `pip-audit` no known vulnerability, 678 tests, 97 % coverage, `data/` untouched, no leftover process | OK |
+
+#### 2. Changes made because of the review
+
+1. The prepared CSV (personal data in clear text) stayed in the Streamlit process memory for the whole session. It is now **forgotten as soon as the download button is clicked** (`forget_prepared_file`, tested).
+2. Test-only: two older navigation tests and one data set assumed pages that were still stubs / a faked `process_invoice` that skips validation; fixed.
+
+No defect in the product code was found in this step.
+
+#### 3. Residual risks
+
+| # | Risk | Severity | Note |
+|---|------|----------|------|
+| 1 | **Row selection in the table was not exercised**: the test tool cannot simulate a click on rows (seeding the selection state did not work). The buttons "Ouvrir / Exporter / Supprimer" with a real selection are only covered through their logic and through seeded state (the confirmation flow) | Medium | Check by hand in a real browser |
+| 2 | The "download" click and the file actually saved by the browser were not observed; whether `on_click` still lets the download through was not tested end to end | Medium | Check by hand |
+| 3 | A downloaded CSV leaves the retention and encryption perimeter (warned on screen) | Medium | Residual risk of the API review |
+| 4 | The preview count is computed with a list request (up to 500 rows decrypted) on each rerun of the Export page | Low | Fine for hundreds of invoices |
+| 5 | Selected ids are kept in the session between the History and Export pages (ids only, no invoice data) | Low | |
+| 6 | Not tested in a real browser (table selection, date pickers, download) | Medium | Planned pass with screenshots |
+
 ### 4. Next steps
 Upload page (progress, per-file errors, free-tier notice), Result page (editable form, delete with confirmation), History, Export (download warning). Each step re-runs the checks above and adds its own.

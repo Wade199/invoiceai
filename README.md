@@ -6,7 +6,7 @@
 Portfolio project by [Ibrahima](https://github.com/) — built while transitioning
 from Junior PHP/Symfony developer to AI Software Engineer.
 
-**Status**: 🚧 API complete (extraction, encrypted storage, CSV export, 387 tests); Streamlit UI to come. See [`PROJECT_BRIEF.md`](PROJECT_BRIEF.md) for the full spec.
+**Status**: 🚧 API and Streamlit interface complete (extraction, encrypted storage, CSV export, 4 screens, 678 tests); checking the interface in a real browser next. See [`PROJECT_BRIEF.md`](PROJECT_BRIEF.md) for the full spec.
 
 ---
 

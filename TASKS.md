@@ -5,15 +5,15 @@
 
 ---
 
-## 🔥 En cours (P0 — Setup & Design)
+## 🔥 En cours
+
+Prochaine étape : **P3 — API + persistance**, en commençant par la sécurité de l'upload (voir `docs/security/P2_SECURITY_REVIEW.md` §5).
 
 | # | Tâche | Priorité | Statut | Estimation |
 |---|-------|----------|--------|------------|
-| 1 | Scaffold arborescence + config (pyproject, requirements, .env.example, .gitignore, Makefile, .streamlit) | High | ✅ Done | 1h |
-| 2 | `scripts/generate_fake_invoices.py` (reportlab + faker) | High | ✅ Done | — |
-| 3 | `git init` + commit initial + tag `v0.0` | High | ✅ Done | — |
-| 4 | Générer les 5 factures fictives (`python scripts/generate_fake_invoices.py`) | Med | 📋 TODO | 5 min |
-| 5 | Wireframes Excalidraw (4 écrans) → export PNG dans `docs/` | Med | 📋 TODO | 1-2h |
+| 13a | P3 — Sécurité upload : nom de fichier généré côté serveur, taille/MIME/magic bytes, limite de traitements parallèles, rate limit (ex-tâche #7) | High | 📋 TODO | 1j |
+| 13b | P3 — API REST FastAPI (upload/extract/history/export/delete) ; `purge_expired()` au démarrage, DELETE authentifié qui appelle `delete_cached()` | High | 📋 TODO | 2-3j |
+| 14 | P3 — SQLAlchemy 2.x + SQLite (rétention RGPD 30 j) | High | 📋 TODO | 1j |
 
 ---
 
@@ -21,17 +21,10 @@
 
 | # | Tâche | Priorité | Dépendances | Estimation |
 |---|-------|----------|-------------|------------|
-| 6 | P1 — `src/ocr/extractor.py` (pdfplumber) | High | #4 | 1-2j |
-| 7 | P1 — Validation upload (`src/api/security.py`) | High | — | 0.5j |
-| 8 | P1 — Tests OCR + script CLI `scripts/test_ocr.py` | High | #6 | 1j |
-| 9 | P2 — Schemas Pydantic v2 (`src/models/schemas.py`) | High | — | 0.5j |
-| 10 | P2 — Adapter Gemini (`src/llm/gemini_adapter.py`) + prompt engineering documenté | High | #9 | 2-3j |
-| 11 | P2 — Validation métier chiffres (`src/services/validate_invoice.py`) | High | #10 | 1j |
-| 12 | P2 — Cache SHA-256 + rate limiting (`tenacity`) | Med | #10 | 1j |
-| 13 | P3 — API REST FastAPI (upload/extract/history/export/delete) | High | #6, #10 | 2-3j |
-| 14 | P3 — SQLAlchemy 2.x + SQLite | High | #13 | 1j |
-| 15 | P4 — UI Streamlit (4 écrans) | High | #13 | 2-3j |
+| 15 | P4 — UI Streamlit (4 écrans) ; `escape_markdown()` sur chaque champ venant du LLM ; barre de progression (7-33 s / facture) | High | #13b | 2-3j |
 | 16 | P5 — README final + Docker + CI + repo GitHub public | Med | P1-P4 | 2-3j |
+| 17 | Test `slow` de `process_invoice` sur l'API réelle (5 factures fictives) | Low | — | 0.5j |
+| 18 | Script CLI `scripts/test_ocr.py` (ex-tâche #8, optionnel) | Low | — | 0.5j |
 
 ---
 
@@ -40,7 +33,15 @@
 | # | Tâche | Date | Notes |
 |---|-------|------|-------|
 | 0 | Cahier des charges V1.0 (`PROJECT_BRIEF.md`) | 2026-09-18 | Cadrage validé avec Ibrahima |
-| 1-3 | Scaffold P0 (structure, config, git) | 2026-09-18 | Voir ci-dessus |
+| 1-3 | Scaffold P0 (structure, config, git), tag `v0.0` | 2026-09-18 | |
+| 4 | 5 factures fictives générées (`data/fake_invoices/`, non versionnées) | 2026-09-18 | |
+| 5 | Wireframes des 4 écrans en texte (`docs/wireframes.md`) | 2026-09-18 | Excalidraw abandonné (voir `DECISIONS.md`) |
+| 6 | P1 — OCR `src/ocr/extractor.py` + tests, tag `v0.1` | 2026-09-18 | Limites anti-DoS et processus isolé ajoutés le 2026-09-20 |
+| 9 | P2 — Schémas Pydantic (`src/models/schemas.py`), sortie LLM nettoyée et bornée | 2026-09-18 | |
+| 10 | P2 — Adapter Gemini + prompt documenté (`docs/prompt_engineering.md`) | 2026-09-20 | Erreurs du SDK réel mappées, quota journalier géré |
+| 11 | P2 — Validation métier des montants (`validate_invoice.py`) | 2026-09-20 | |
+| 12 | P2 — Cache SHA-256 chiffré (Fernet, TTL 30 j) + `process_invoice` | 2026-09-20 | Le « rate limiting tenacity » est devenu : retry sur limite par minute, pas sur quota journalier (20 req/jour/modèle) |
+| — | Revue sécurité P2 v2, tag `v0.2.1` | 2026-09-20 | `docs/security/P2_SECURITY_REVIEW.md` ; test injection sur API réelle validé le 2026-09-21 |
 
 ---
 

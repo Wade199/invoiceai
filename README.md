@@ -6,7 +6,7 @@
 Portfolio project by [Ibrahima](https://github.com/) — built while transitioning
 from Junior PHP/Symfony developer to AI Software Engineer.
 
-**Status**: 🚧 P0 — scaffold in progress. See [`PROJECT_BRIEF.md`](PROJECT_BRIEF.md) for the full spec.
+**Status**: 🚧 v0.2.1 — extraction pipeline done (OCR → Gemini → validation → encrypted cache, 104 tests); API, database and UI to come. See [`PROJECT_BRIEF.md`](PROJECT_BRIEF.md) for the full spec.
 
 ---
 

@@ -1,3 +1,5 @@
+<p align="left"><img src="docs/assets/logo.png" alt="InvoiceAI logo" width="220"></p>
+
 # InvoiceAI
 
 > AI-powered extraction of structured data (supplier, dates, amounts, line items)

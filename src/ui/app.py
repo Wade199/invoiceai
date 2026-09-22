@@ -15,10 +15,12 @@ from src.ui.errors import UiError  # noqa: E402
 from src.ui.safe import safe  # noqa: E402
 
 _VERSION = "0.3"
+_ASSETS = Path(__file__).resolve().parent / "assets"
 
 
 def main() -> None:
-    st.set_page_config(page_title="InvoiceAI", page_icon="🧾", layout="wide")
+    st.set_page_config(page_title="InvoiceAI", page_icon=str(_ASSETS / "icon.png"), layout="wide")
+    st.logo(str(_ASSETS / "logo.png"), size="large", icon_image=str(_ASSETS / "icon.png"))
     navigation = st.navigation(
         [
             st.Page("pages/upload.py", title="Upload", icon="📤", default=True),

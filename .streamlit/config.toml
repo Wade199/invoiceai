@@ -1,9 +1,32 @@
 [theme]
 base = "dark"
-primaryColor = "#6366F1"
-backgroundColor = "#0E1117"
-secondaryBackgroundColor = "#1A1D24"
-textColor = "#FAFAFA"
+
+# --- Brand ---
+primaryColor = "#6366F1"          # indigo, chosen in the project brief
+
+# --- Surfaces ---
+backgroundColor = "#0B0D12"
+secondaryBackgroundColor = "#161A23"
+textColor = "#F5F6FA"
+
+# --- Status colors (aligned with "Fiable" / "À vérifier" / errors) ---
+greenColor = "#22C55E"
+orangeColor = "#F5A524"
+redColor = "#F45B69"
+blueColor = "#38BDF8"
+
+# --- Links ---
+linkColor = "#A5B4FC"
+linkUnderline = false
+
+# --- Shape ---
+baseRadius = "large"
+buttonRadius = "medium"
+borderColor = "#242938"
+dataframeBorderColor = "#242938"
+showWidgetBorder = true
+showSidebarBorder = true
+
 font = "sans serif"
 
 [server]

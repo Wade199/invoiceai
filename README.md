@@ -8,7 +8,7 @@
 Portfolio project by [Ibrahima](https://github.com/) — built while transitioning
 from Junior PHP/Symfony developer to AI Software Engineer.
 
-**Status**: 🚧 API and Streamlit interface complete (extraction, encrypted storage, CSV export, 4 screens, 678 tests); checking the interface in a real browser next. See [`PROJECT_BRIEF.md`](PROJECT_BRIEF.md) for the full spec.
+**Status**: ✅ API and Streamlit interface complete (extraction, encrypted storage, CSV export, 4 screens, 678 tests), verified in a real browser (light + dark theme, security checks). See [`PROJECT_BRIEF.md`](PROJECT_BRIEF.md) for the full spec.
 
 ---
 
@@ -17,6 +17,46 @@ from Junior PHP/Symfony developer to AI Software Engineer.
 Upload a PDF invoice/quote → the app extracts the supplier, dates, HT/VAT/TTC
 amounts and line items via a Gemini-powered LLM pipeline, validates the numbers
 for consistency (LLMs hallucinate), and lets you export the result to CSV.
+
+## Screenshots
+
+<table>
+<tr>
+<td width="50%">
+
+**Upload** — batch of PDFs, extraction progress
+
+<img src="docs/screenshots/upload.png" alt="Upload screen">
+
+</td>
+<td width="50%">
+
+**Résultat** — editable form, reliability check
+
+<img src="docs/screenshots/result.png" alt="Result screen">
+
+</td>
+</tr>
+<tr>
+<td width="50%">
+
+**Historique** — filters, hostile content shown as plain text (no injection)
+
+<img src="docs/screenshots/history.png" alt="History screen">
+
+</td>
+<td width="50%">
+
+**Export** — CSV with formula-injection neutralised
+
+<img src="docs/screenshots/export.png" alt="Export screen">
+
+</td>
+</tr>
+</table>
+
+The app ships a native light/dark theme (Streamlit's own `[theme.light]` /
+`[theme.dark]`, switchable from ⋮ → Settings → Theme) — no custom CSS.
 
 ## Stack (V1)
 

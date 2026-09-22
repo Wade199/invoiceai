@@ -5,8 +5,9 @@
 > AI-powered extraction of structured data (supplier, dates, amounts, line items)
 > from PDF invoices and quotes, exported to CSV/Excel.
 
-Portfolio project by [Ibrahima](https://github.com/) — built while transitioning
-from Junior PHP/Symfony developer to AI Software Engineer.
+Portfolio project by [Ibrahima](https://github.com/) — Junior PHP/Symfony developer,
+training to steer projects and pick up new stacks with AI as a copilot, not a
+replacement for learning.
 
 **Status**: ✅ API and Streamlit interface complete (extraction, encrypted storage, CSV export, 4 screens, 678 tests), verified in a real browser (light + dark theme, security checks). See [`PROJECT_BRIEF.md`](PROJECT_BRIEF.md) for the full spec.
 

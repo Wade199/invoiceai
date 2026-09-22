@@ -7,7 +7,7 @@
 
 ## 🔥 En cours
 
-**P3 terminé** (API + base + export). Prochaine étape : **P4 — interface Streamlit** (tâche 15).
+**P4 terminé** (UI + passe navigateur + captures + thème clair/sombre). Prochaine étape : finir P5 (tâche 16 — Docker + CI + repo public) ou retenter la tâche 19 (quota/503 Gemini) plus tard dans la journée.
 
 ---
 
@@ -15,12 +15,9 @@
 
 | # | Tâche | Priorité | Dépendances | Estimation |
 |---|-------|----------|-------------|------------|
-| 15 | P4 — UI Streamlit (4 écrans) — **socle et 4 écrans (Upload, Résultat, Historique, Export) faits le 2026-09-21**, lanceur `python scripts/run.py`, revue `docs/security/P4_UI_REVIEW.md` ; **reste : la passe dans un vrai navigateur (tâche 21)** ; ; `escape_markdown()` sur chaque champ venant du LLM ; barre de progression (7-33 s / facture) | High | #13b | 2-3j |
-| 16 | P5 — README final + Docker + CI + repo GitHub public | Med | P1-P4 | 2-3j |
+| 16 | P5 — reste : Docker + CI + décider de rendre le repo GitHub public (README déjà fini, captures incluses) | Med | P1-P4 | 2-3j |
+| 19 | Rejouer `pytest -m slow` avec Gemini réel — **tenté le 2026-09-22 : 1 échec (503 « high demand », panne temporaire Google, géré correctement par le retry/`ProviderTimeoutError`) + 1 ignoré (quota épuisé après les retries)**. Pas un bug — à retenter plus tard dans la journée | Med | — | 0.25j |
 | 17 | Test `slow` de `process_invoice` sur l'API réelle (5 factures fictives) | Low | — | 0.5j |
-| 19 | Rejouer `pytest -m slow` + un `POST /invoices` réel avec Gemini quand le quota est rechargé (le test de bout en bout de P3 a tourné avec un faux Gemini) | Med | — | 0.25j |
-| 21 | **Passe dans un vrai navigateur (P4)** : Upload (glisser-déposer), Résultat (saisie dans le tableau, fenêtre de suppression), Historique (sélection de lignes, Ouvrir / Exporter / Supprimer), Export (téléchargement) ; captures d'écran pour le README | High | — | 0.5j |
-| 20 | Ouvrir un export piégé dans Excel ; tester `Host`/CORS dans un vrai navigateur | Med | — | 0.25j |
 | 18 | Script CLI `scripts/test_ocr.py` (ex-tâche #8, optionnel) | Low | — | 0.5j |
 
 ---
@@ -43,6 +40,8 @@
 | 13c | P3 — Export CSV (`src/services/export.py`) : factures + lignes, format Excel FR (`;`, virgule, BOM), neutralisation des formules | 2026-09-21 | 314 tests ; revue : `docs/security/P3_EXPORT_REVIEW.md` |
 | 13b | P3 — API REST FastAPI : `POST/GET/PUT/DELETE /invoices`, export CSV, `/health`, jeton, contrôle de l'hôte, en-têtes, limiteurs, purge au démarrage | 2026-09-21 | 387 tests ; revue : `docs/security/P3_API_REVIEW.md` |
 | — | Revue sécurité P2 v2, tag `v0.2.1` | 2026-09-20 | `docs/security/P2_SECURITY_REVIEW.md` ; test injection sur API réelle validé le 2026-09-21 |
+| 21 | Passe dans un vrai navigateur (P4) + captures d'écran pour le README | 2026-09-22 | Upload/Résultat/Historique/Export vérifiés ; facture hostile confirmée en texte littéral ; thème clair/sombre natif ajouté et vérifié |
+| 20 | Excel : formules neutralisées, confirmé pendant la passe navigateur (2026-09-21). `Host`/CORS testés en direct (2026-09-22) : `Host` usurpé → 400 (`TrustedHostMiddleware`, avant même la vérification du jeton) ; aucune route CORS déclarée → un navigateur bloquerait tout appel cross-origin authentifié (le preflight `OPTIONS` renvoie 405) | 2026-09-22 | — |
 
 ---
 

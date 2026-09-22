@@ -15,15 +15,22 @@ orangeColor = "#F5A524"
 redColor = "#F45B69"
 blueColor = "#38BDF8"
 
+# --- Secondary text (st.caption, help text): tuned instead of left automatic,
+# so every caption in the app reads consistently against our own background. ---
+grayColor = "#7C8496"
+grayTextColor = "#8B93A7"
+
 # --- Links ---
 linkColor = "#A5B4FC"
 linkUnderline = false
 
-# --- Shape ---
-baseRadius = "large"
-buttonRadius = "medium"
+# --- Shape: explicit sizes instead of named presets ("large"/"medium"), so the
+# exact radius is known rather than left to Streamlit's own token mapping. ---
+baseRadius = "0.9rem"
+buttonRadius = "0.6rem"
 borderColor = "#242938"
 dataframeBorderColor = "#242938"
+dataframeHeaderBackgroundColor = "#1D2230"
 showWidgetBorder = true
 showSidebarBorder = true
 

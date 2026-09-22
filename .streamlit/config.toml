@@ -74,4 +74,7 @@ gatherUsageStats = false
 [client]
 # No stack traces (file paths, code) in the browser.
 showErrorDetails = "none"
-toolbarMode = "minimal"
+# "viewer" (not "minimal"): hides developer options (rerun/clear cache/deploy)
+# but keeps viewer options in the ⋮ menu, notably the theme picker — with
+# "minimal" the whole menu disappears once no options are left, hiding it too.
+toolbarMode = "viewer"

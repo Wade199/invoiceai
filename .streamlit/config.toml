@@ -1,40 +1,63 @@
 [theme]
+# Startup theme; the user can switch to the other one from Streamlit's own
+# settings menu (⋮ > Settings > Theme) — no code of ours is involved in that.
 base = "dark"
 
-# --- Brand ---
+# --- Options shared by both themes (brand + shape) ---
 primaryColor = "#6366F1"          # indigo, chosen in the project brief
+linkUnderline = false
 
-# --- Surfaces ---
+# Explicit sizes instead of named presets ("large"/"medium"), so the exact
+# radius is known rather than left to Streamlit's own token mapping.
+baseRadius = "0.9rem"
+buttonRadius = "0.6rem"
+showWidgetBorder = true
+showSidebarBorder = true
+
+font = "sans serif"
+
+# --- Dark theme (current default) ---
+[theme.dark]
 backgroundColor = "#0B0D12"
 secondaryBackgroundColor = "#161A23"
 textColor = "#F5F6FA"
 
-# --- Status colors (aligned with "Fiable" / "À vérifier" / errors) ---
+# Status colors (aligned with "Fiable" / "À vérifier" / errors)
 greenColor = "#22C55E"
 orangeColor = "#F5A524"
 redColor = "#F45B69"
 blueColor = "#38BDF8"
 
-# --- Secondary text (st.caption, help text): tuned instead of left automatic,
-# so every caption in the app reads consistently against our own background. ---
+# Secondary text (st.caption, help text): tuned instead of left automatic,
+# so every caption in the app reads consistently against our own background.
 grayColor = "#7C8496"
 grayTextColor = "#8B93A7"
 
-# --- Links ---
 linkColor = "#A5B4FC"
-linkUnderline = false
-
-# --- Shape: explicit sizes instead of named presets ("large"/"medium"), so the
-# exact radius is known rather than left to Streamlit's own token mapping. ---
-baseRadius = "0.9rem"
-buttonRadius = "0.6rem"
 borderColor = "#242938"
 dataframeBorderColor = "#242938"
 dataframeHeaderBackgroundColor = "#1D2230"
-showWidgetBorder = true
-showSidebarBorder = true
 
-font = "sans serif"
+# --- Light theme (same tokens, re-tuned for contrast on a white surface) ---
+[theme.light]
+backgroundColor = "#FFFFFF"
+secondaryBackgroundColor = "#F3F4F6"
+textColor = "#111827"
+
+# Same statuses, darkened so they stay AA-readable on white instead of on
+# near-black.
+greenColor = "#16A34A"
+orangeColor = "#B45309"
+redColor = "#DC2626"
+blueColor = "#0284C7"
+
+grayColor = "#6B7280"
+grayTextColor = "#4B5563"
+
+linkColor = "#4F46E5"
+borderColor = "#E5E7EB"
+dataframeBorderColor = "#E5E7EB"
+dataframeHeaderBackgroundColor = "#F3F4F6"
 
 [server]
 # Local, single-user tool: never listen on the network.

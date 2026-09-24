@@ -62,9 +62,16 @@ def port_is_free(port: int, host: str = HOST) -> bool:
 
 
 def build_commands(
-    python: str, api_port: int, ui_port: int, *, headless: bool
+    python: str, api_port: int, ui_port: int, *, headless: bool, ui_host: str = HOST
 ) -> tuple[list[str], list[str]]:
-    """The two commands: the API (uvicorn, factory mode) and the interface (Streamlit)."""
+    """The two commands: the API (uvicorn, factory mode) and the interface (Streamlit).
+
+    The API always binds `HOST` (127.0.0.1): nothing outside this machine's own processes
+    should ever reach it directly. `ui_host` defaults to the same loopback-only address for a
+    native run, but can be widened (e.g. "0.0.0.0" in Docker, see UI_HOST in main()) since a
+    container's 127.0.0.1 is only reachable from inside that same container — the UI itself
+    still only talks to the API over the container's own loopback either way.
+    """
     api = [
         python, "-m", "uvicorn", "src.api.app:create_app", "--factory",
         "--host", HOST, "--port", str(api_port),
@@ -73,7 +80,7 @@ def build_commands(
     ]  # fmt: skip
     ui = [
         python, "-m", "streamlit", "run", "src/ui/app.py",
-        "--server.address", HOST, "--server.port", str(ui_port),
+        "--server.address", ui_host, "--server.port", str(ui_port),
         "--server.headless", "true" if headless else "false",
     ]  # fmt: skip
     return api, ui
@@ -214,8 +221,12 @@ def main(argv: Sequence[str] | None = None, root: Path = ROOT) -> int:
             print(f"  - {problem}")
         return 2
 
+    # Not exposed as a CLI flag on purpose: this is a deployment concern (Docker), not
+    # something a local user should need to think about. Defaults to the same loopback-only
+    # address as everything else.
+    ui_host = os.getenv("UI_HOST", HOST)
     api_command, ui_command = build_commands(
-        sys.executable, args.api_port, args.ui_port, headless=args.no_browser
+        sys.executable, args.api_port, args.ui_port, headless=args.no_browser, ui_host=ui_host
     )
     guard = ProcessGuard()
     api = ui = None
@@ -232,7 +243,7 @@ def main(argv: Sequence[str] | None = None, root: Path = ROOT) -> int:
         # from .env / .env.ui and must not inherit the Gemini or encryption keys.
         ui_env = {key: value for key, value in os.environ.items() if key not in _REQUIRED[:2]}
         ui_env["API_URL"] = f"http://{HOST}:{args.api_port}"
-        print(f"Démarrage de l'interface sur http://{HOST}:{args.ui_port} ...")
+        print(f"Démarrage de l'interface sur http://{ui_host}:{args.ui_port} ...")
         ui = guard.popen(ui_command, cwd=root, env=ui_env)
         print("InvoiceAI est prêt. Ctrl+C pour arrêter les deux serveurs.")
 

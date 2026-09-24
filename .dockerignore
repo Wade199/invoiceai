@@ -1,0 +1,23 @@
+# Never bake secrets or local state into the image.
+.env
+.env.*
+!.env.example
+data/
+secrets/
+
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+.git/
+.github/
+docs/
+tests/
+*.md
+PROJECT_BRIEF.md
+DECISIONS.md
+TASKS.md

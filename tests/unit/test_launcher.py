@@ -80,6 +80,13 @@ def test_commands_listen_on_localhost_only_and_hide_what_should_be_hidden() -> N
     assert launcher.build_commands("p", 1, 2, headless=False)[1][-1] == "false"
 
 
+def test_ui_host_widens_only_the_interface_never_the_api() -> None:
+    """A container's 127.0.0.1 isn't reachable from outside it: only the UI may be widened."""
+    api, ui = launcher.build_commands("python", 8123, 8623, headless=True, ui_host="0.0.0.0")
+    assert api[api.index("--host") + 1] == "127.0.0.1"  # the API is never widened
+    assert ui[ui.index("--server.address") + 1] == "0.0.0.0"
+
+
 def test_wait_until_healthy_gives_up_when_the_process_is_gone() -> None:
     assert launcher.wait_until_healthy("http://127.0.0.1:1/health", 5.0, lambda: False) is False
 
@@ -178,6 +185,20 @@ def test_the_interface_process_does_not_inherit_the_secret_keys(fake_servers, tm
     assert ui_env["API_URL"] == f"http://127.0.0.1:{api_port}"
     assert ui_env["API_TOKEN"] == GOOD["API_TOKEN"]  # the one secret the interface needs
     assert "env" not in api_kwargs  # the API inherits everything: it is the one holding the keys
+
+
+def test_ui_host_env_var_reaches_the_interface_command(
+    fake_servers, tmp_path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The Docker use case: UI_HOST=0.0.0.0 widens the interface, never the API."""
+    monkeypatch.setenv("UI_HOST", "0.0.0.0")
+    started, _plan = fake_servers
+    launcher.main(
+        ["--no-browser", "--api-port", str(_free_port()), "--ui-port", str(_free_port())], tmp_path
+    )
+    (api_cmd, _, _), (ui_cmd, _, _) = started
+    assert api_cmd[api_cmd.index("--host") + 1] == "127.0.0.1"
+    assert ui_cmd[ui_cmd.index("--server.address") + 1] == "0.0.0.0"
 
 
 def test_the_api_is_started_first_and_both_are_stopped_when_one_dies(

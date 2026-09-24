@@ -1,0 +1,17 @@
+# Usage: docker compose up --build
+# Requires a .env file in this directory (see .env.example) — never committed, passed at
+# runtime only. The UI is the only thing published, and only to the host's own loopback:
+# the API stays unreachable from outside the container, same as running it locally.
+services:
+  invoiceai:
+    build: .
+    ports:
+      - "127.0.0.1:8501:8501"
+    env_file:
+      - .env
+    volumes:
+      - invoiceai-data:/app/data
+    restart: unless-stopped
+
+volumes:
+  invoiceai-data:

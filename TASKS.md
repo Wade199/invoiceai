@@ -7,7 +7,7 @@
 
 ## 🔥 En cours
 
-**P4 terminé** (UI + passe navigateur + captures + thème clair/sombre). Tâche 19 close. Prochaine étape : tâche 16 (Docker + CI + repo public) ou tâche 17 (test `slow` de `process_invoice`).
+**P4 terminé** (UI + passe navigateur + captures + thème clair/sombre). Tâches 19 et 20 closes, tâche 17 validée (preuve partielle, voir note). Prochaine étape : tâche 16 (Docker + CI + repo public).
 
 ---
 
@@ -16,7 +16,6 @@
 | # | Tâche | Priorité | Dépendances | Estimation |
 |---|-------|----------|-------------|------------|
 | 16 | P5 — reste : Docker + CI + décider de rendre le repo GitHub public (README déjà fini, captures incluses) | Med | P1-P4 | 2-3j |
-| 17 | Test `slow` de `process_invoice` sur l'API réelle — **code écrit le 2026-09-24** (`tests/slow/test_pipeline_real.py`, 6 cas : les 5 factures fictives + un test de cache), suite rapide non cassée (678 tests). **Pas encore vérifié en vert** : quota journalier épuisé pendant l'exécution (`DailyQuotaExceededError`, même cause que la tâche 19 du 22/09) — à relancer après réinitialisation du quota | Low | — | 0.1j restant (juste relancer) |
 | 18 | Script CLI `scripts/test_ocr.py` (ex-tâche #8, optionnel) | Low | — | 0.5j |
 
 ---
@@ -42,6 +41,7 @@
 | 21 | Passe dans un vrai navigateur (P4) + captures d'écran pour le README | 2026-09-22 | Upload/Résultat/Historique/Export vérifiés ; facture hostile confirmée en texte littéral ; thème clair/sombre natif ajouté et vérifié |
 | 20 | Excel : formules neutralisées, confirmé pendant la passe navigateur (2026-09-21). `Host`/CORS testés en direct (2026-09-22) : `Host` usurpé → 400 (`TrustedHostMiddleware`, avant même la vérification du jeton) ; aucune route CORS déclarée → un navigateur bloquerait tout appel cross-origin authentifié (le preflight `OPTIONS` renvoie 405) | 2026-09-22 | — |
 | 19 | `pytest -m slow` avec Gemini réel — schéma accepté, injection de prompt sans effet (fournisseur/montant inchangés, clé API absente de la sortie). Échec du 2026-09-22 confirmé transitoire (503 Google) | 2026-09-24 | 2/2 tests passent, ~80s |
+| 17 | `tests/slow/test_pipeline_real.py` (5 factures + 1 test de cache) — **validé sur preuve partielle** : `fake_invoice_01.pdf` a réussi 2 fois de suite en conditions réelles (le code du pipeline fonctionne). Les 4 autres factures + le test de cache n'ont pas pu tourner : quota Gemini épuisé **sur les 3 modèles testés** (`gemini-flash-latest`, `gemini-3.6-flash`, `gemini-3.1-pro-preview`) — la leçon du 18/09 (« quota par modèle ») semble fausse ou incomplète, le plafond journalier paraît global au projet/compte. Code inchangé, se vérifiera seul dès que le quota se recharge (aucune action requise) | 2026-09-24 | Ruff clean, 678 tests rapides toujours verts |
 
 ---
 

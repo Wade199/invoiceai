@@ -128,6 +128,7 @@ Full checklist: [`docs/security/SECURITY_CHECKLIST.md`](docs/security/SECURITY_C
 ## Project docs
 
 - [`PROJECT_BRIEF.md`](PROJECT_BRIEF.md) — full V1.0 spec (source of truth)
+- [`docs/architecture.md`](docs/architecture.md) — components, request flow, deployment (Mermaid diagrams)
 - [`PROJECT_CONTEXT.md`](PROJECT_CONTEXT.md) — living architecture/decisions doc
 - [`TASKS.md`](TASKS.md) — phase-by-phase backlog
 - [`DECISIONS.md`](DECISIONS.md) — decision log

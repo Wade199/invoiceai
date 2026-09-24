@@ -58,6 +58,20 @@ def display_name(filename: str | None) -> str:
     return clean_text(basename, _DISPLAY_NAME_MAX) or _FALLBACK_NAME
 
 
+def _best_effort_unlink(path: Path) -> None:
+    """Clean up a partial upload; never let a cleanup failure hide the error being raised.
+
+    `missing_ok=True` only covers the file already being gone. It does NOT cover `target`'s
+    parent turning out not to be a directory (e.g. `UPLOAD_DIR` points at a plain file):
+    Linux raises `NotADirectoryError` there, which Windows does not (`FileNotFoundError`
+    instead) — found by running the suite in a Linux container before trusting CI with it.
+    """
+    try:
+        path.unlink(missing_ok=True)
+    except OSError:
+        pass
+
+
 async def save_upload(file: UploadFile) -> StoredUpload:
     """Validate and store an uploaded PDF under a server-generated name.
 
@@ -97,10 +111,10 @@ async def save_upload(file: UploadFile) -> StoredUpload:
         if size == 0:
             raise InvalidUploadError("Empty file")
     except OSError as exc:
-        target.unlink(missing_ok=True)
+        _best_effort_unlink(target)
         raise StorageError(f"Cannot store upload: {type(exc).__name__}") from exc
     except BaseException:
-        target.unlink(missing_ok=True)
+        _best_effort_unlink(target)
         raise
 
     return StoredUpload(path=target, display_name=display_name(file.filename), size=size)

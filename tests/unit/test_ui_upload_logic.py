@@ -29,9 +29,11 @@ class FakeClient:
     def __init__(self, *answers) -> None:
         self.answers = list(answers)
         self.sent: list[str] = []
+        self.sent_mimes: list[str] = []
 
-    def upload(self, filename: str, data: bytes) -> InvoiceView:
+    def upload(self, filename: str, data: bytes, mime: str) -> InvoiceView:
         self.sent.append(filename)
+        self.sent_mimes.append(mime)
         answer = self.answers.pop(0) if self.answers else _view(filename)
         if isinstance(answer, Exception):
             raise answer
@@ -43,9 +45,9 @@ class FakeClient:
     ("data", "reason"),
     [
         pytest.param(b"", "vide", id="empty"),
-        pytest.param(b"MZ\x90\x00", "pas un PDF", id="executable"),
+        pytest.param(b"MZ\x90\x00", "non reconnu", id="executable"),
         # the signature must be the first bytes
-        pytest.param(b"junk%PDF-1.4", "pas un PDF", id="signature-not-first"),
+        pytest.param(b"junk%PDF-1.4", "non reconnu", id="signature-not-first"),
         # explicit ids: pytest would otherwise build a test name out of these 10 MB of bytes,
         # which Windows refuses to store in an environment variable (32,767 characters max)
         pytest.param(b"%PDF" + b"0" * MAX_BYTES, "volumineux", id="too-big"),
@@ -134,3 +136,21 @@ def test_hostile_file_names_pass_through_untouched_as_data() -> None:
 
 def test_an_empty_selection_gives_no_outcome() -> None:
     assert process_batch(FakeClient(), []) == []
+
+
+# --- photos / scans ------------------------------------------------------------------------
+JPEG = b"\xff\xd8\xff\xe0\x00\x10JFIF something"
+PNG = b"\x89PNG\r\n\x1a\n something"
+
+
+@pytest.mark.parametrize("data", [JPEG, PNG])
+def test_a_valid_photo_passes_the_precheck(data: bytes) -> None:
+    assert precheck(Candidate("x.jpg", data)) is None
+
+
+def test_process_batch_sends_the_detected_mime_for_each_file() -> None:
+    client = FakeClient()
+    process_batch(
+        client, [Candidate("a.pdf", PDF), Candidate("b.jpg", JPEG), Candidate("c.png", PNG)]
+    )
+    assert client.sent_mimes == ["application/pdf", "image/jpeg", "image/png"]

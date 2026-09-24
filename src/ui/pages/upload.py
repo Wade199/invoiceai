@@ -39,15 +39,19 @@ def _show_outcome(outcome: Outcome) -> None:
 
 st.title("📤 Uploader une facture ou un devis")
 st.caption(
-    f"Formats acceptés : PDF · Taille max : 10 Mo par fichier · {MAX_FILES} fichiers par lot"
+    f"Formats acceptés : PDF, JPG, PNG · Taille max : 10 Mo par fichier · "
+    f"{MAX_FILES} fichiers par lot"
 )
 
 with st.expander("🔐 Confidentialité et limites", expanded=True):
     st.markdown(
-        "- Le PDF est **supprimé du serveur** dès que l'extraction est terminée. Seul le résultat "
-        "est conservé, **chiffré**, puis effacé automatiquement.\n"
-        "- Avant l'envoi à Google Gemini, les **IBAN, e-mails et numéros de téléphone sont "
-        "masqués**. Les noms, adresses et montants, eux, sont envoyés.\n"
+        "- Le fichier est **supprimé du serveur** dès que l'extraction est terminée. Seul le "
+        "résultat est conservé, **chiffré**, puis effacé automatiquement.\n"
+        "- **PDF** : avant l'envoi à Google Gemini, les **IBAN, e-mails et numéros de téléphone "
+        "sont masqués**. Les noms, adresses et montants, eux, sont envoyés.\n"
+        "- **Photo / scan (JPG, PNG)** : envoyée **telle quelle** à Google Gemini — **aucun "
+        "masquage possible** sur une image (contrairement au PDF). Évitez les photos où IBAN, "
+        "e-mail ou téléphone sont visibles si vous voulez éviter de les envoyer.\n"
         "- Plan gratuit de Gemini : **20 extractions par jour et par modèle**. En dehors de "
         "l'Espace économique européen, de la Suisse et du Royaume-Uni, Google peut réutiliser "
         "le contenu du plan gratuit : n'envoyez alors que des factures fictives."
@@ -55,8 +59,8 @@ with st.expander("🔐 Confidentialité et limites", expanded=True):
 
 st.session_state.setdefault(ROUND_KEY, 0)
 files = st.file_uploader(
-    "Glissez vos PDF ici",
-    type=["pdf"],
+    "Glissez vos PDF, JPG ou PNG ici",
+    type=["pdf", "jpg", "jpeg", "png"],
     accept_multiple_files=True,
     key=f"uploader_{st.session_state[ROUND_KEY]}",
 )

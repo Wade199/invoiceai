@@ -49,7 +49,7 @@ def api(monkeypatch: pytest.MonkeyPatch):
         # process_invoice is faked, so the reliability validate_invoice would set is explicit
         _invoice("Boulangerie Lune", "2026-09-15", ttc=999.0, number="B-3", confidence="low"),
     ]
-    monkeypatch.setattr(routes, "process_invoice", lambda _path: queue.pop(0))
+    monkeypatch.setattr(routes, "process_invoice", lambda _path, _mime: queue.pop(0))
     with TestClient(create_app(), headers={"Authorization": f"Bearer {TOKEN}"}) as http:
         client = ApiClient(http)
         for name in ("a.pdf", "b.pdf", "c.pdf"):

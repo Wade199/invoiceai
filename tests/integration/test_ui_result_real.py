@@ -40,7 +40,7 @@ def _invoice() -> ExtractedInvoice:
 def _config(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("API_TOKEN", TOKEN)
     monkeypatch.setenv("ALLOWED_HOSTS", "testserver")
-    monkeypatch.setattr(routes, "process_invoice", lambda _path: _invoice())
+    monkeypatch.setattr(routes, "process_invoice", lambda _path, _mime: _invoice())
 
 
 @pytest.fixture

@@ -91,13 +91,14 @@ class ApiClient:
         if self._json(response).get("status") != "ok":
             raise ApiUnavailableError("L'API répond, mais son état n'est pas « ok ».")
 
-    def upload(self, filename: str, data: bytes) -> InvoiceView:
-        """Send one PDF: extraction takes several seconds. The API deletes the PDF afterwards."""
+    def upload(self, filename: str, data: bytes, mime: str = "application/pdf") -> InvoiceView:
+        """Send one file (PDF, JPEG or PNG): extraction takes several seconds. The API deletes
+        it afterwards."""
         response = self._request(
             "POST",
             "/invoices",
             timeout=_UPLOAD_TIMEOUT,
-            files={"file": (filename, data, "application/pdf")},
+            files={"file": (filename, data, mime)},
         )
         return self._parse(InvoiceView, self._json(response))
 

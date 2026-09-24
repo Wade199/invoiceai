@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 from pathlib import Path
 
 import pytest
@@ -248,6 +249,51 @@ def test_no_free_tier_warning_when_paid(monkeypatch, caplog):
     gemini_adapter.extract_invoice_data(_sample_document())
 
     assert "FREE tier" not in caplog.text
+
+
+# --- Photo / scan path (extract_invoice_data_from_image) ----------------------------------
+def test_extract_invoice_data_from_image_returns_parsed_invoice(monkeypatch):
+    expected = ExtractedInvoice(invoice_number="INV-3")
+    fake_llm = _FakeStructuredLLM(result=expected)
+    monkeypatch.setattr(gemini_adapter, "_build_structured_llm", lambda: fake_llm)
+
+    result = gemini_adapter.extract_invoice_data_from_image(
+        b"\xff\xd8\xffJPEGDATA", "image/jpeg", Path("photo.jpg")
+    )
+
+    assert result is expected
+    assert fake_llm.calls == 1
+
+
+def test_extract_invoice_data_from_image_sends_the_image_unmodified_and_unmasked(monkeypatch):
+    """No prepare_text_for_llm() pass exists for images: nothing is masked before it is sent
+    (documented trade-off — see gemini_adapter.extract_invoice_data_from_image's docstring)."""
+    spy = _SpyLLM(result=ExtractedInvoice(invoice_number="INV-4"))
+    monkeypatch.setattr(gemini_adapter, "_build_structured_llm", lambda: spy)
+    raw_bytes = b"\x89PNG\r\n\x1a\nFAKE-PNG-WITH-IBAN-FR76"
+
+    gemini_adapter.extract_invoice_data_from_image(raw_bytes, "image/png", Path("scan.png"))
+
+    [prompt_input] = spy.prompts  # one call; extract_invoice_data_from_image passes [message]
+    [message] = prompt_input
+    blocks = {block["type"]: block for block in message.content}
+    assert blocks["text"]["text"] == gemini_adapter._IMAGE_EXTRACTION_PROMPT
+    data_url = blocks["image_url"]["image_url"]["url"]
+    assert data_url == "data:image/png;base64," + base64.b64encode(raw_bytes).decode("ascii")
+    # The raw bytes decode back exactly: nothing was redacted, resized or re-encoded.
+    assert base64.b64decode(data_url.split(",", 1)[1]) == raw_bytes
+
+
+def test_extract_invoice_data_from_image_maps_errors_through_the_shared_path(monkeypatch):
+    """One representative case: the rest of the error matrix is _invoke's, already covered
+    by extract_invoice_data's tests above — both functions share the same call."""
+    fake_llm = _FakeStructuredLLM(error=_langchain_error(429), fail_times=99)
+    monkeypatch.setattr(gemini_adapter, "_build_structured_llm", lambda: fake_llm)
+
+    with pytest.raises(RateLimitError):
+        gemini_adapter.extract_invoice_data_from_image(b"data", "image/jpeg", Path("x.jpg"))
+
+    assert fake_llm.calls == 3  # retried, same as the text path
 
 
 def test_daily_quota_is_not_retried_and_not_echoed(monkeypatch):

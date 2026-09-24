@@ -61,3 +61,29 @@ Revision 2 (re-audit)
 3. Escape every LLM field on output (`escape_markdown`) — JSON API included if a client renders it.
 4. Decide on the paid tier / provider before any real customer data.
 5. Re-run `pip-audit` and `bandit` (`pytest -m slow` already passed on 2026-09-21).
+
+## 6. Revision 3 — photo/scan extraction added (2026-09-24)
+
+Scope: `extract_invoice_data_from_image()` (`src/llm/gemini_adapter.py`), the multi-type upload
+validation (`src/api/upload.py`), and the pipeline branch (`src/services/pipeline.py`) added to
+accept JPEG/PNG alongside PDF. See `TECHNICAL_DESIGN.md` §2.2b for the design.
+
+**What was verified**: same upload-layer checks as PDF (size, declared-type-must-match-magic-
+bytes) now applied per allowed type; live tests confirm a photo upload goes through the image
+path end-to-end (real upload validation, real API route, only the Gemini call mocked) and
+never through the PDF/OCR path; `ruff`/`bandit`/`pip-audit` clean; 699 tests (7 new: upload
+validation, adapter, pipeline branch, API route, UI logic).
+
+**New residual risk**:
+
+| # | Risk | Severity | Note |
+|---|------|----------|------|
+| 11 | **A photo/scan is sent to Gemini with no IBAN/e-mail/phone masking.** `prepare_text_for_llm()` only runs on OCR text (the PDF path); there is no text to mask before an image is sent — masking an image would need local OCR plus redacting the located pixels, out of scope | Medium | **Decision (Ibrahima, 2026-09-24)**: accepted, with an explicit warning shown in the UI before any image upload (`src/ui/pages/upload.py`) rather than silently degrading the guarantee. Same free-tier data-reuse terms as the text path apply on top of this. |
+
+**Not verified**: the real LangChain multimodal message format (`HumanMessage` with an
+`image_url` content block) has never been confirmed against the live Gemini API — quota was
+exhausted on 2026-09-24 when this was written (`tests/slow/test_gemini_real.py::
+test_provider_reads_a_photographed_invoice`, skipped). The shape matches
+`langchain-google-genai`'s own documented example (read from its installed source, not
+guessed) and 21 unit tests cover the adapter's own logic, but the real-API round trip itself
+is still open — rerun that one test once the quota resets.

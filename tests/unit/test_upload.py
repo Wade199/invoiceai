@@ -15,6 +15,8 @@ from src.api import upload
 from src.core.exceptions import InvalidUploadError, StorageError, UploadTooLargeError
 
 PDF = b"%PDF-1.4\n1 0 obj\n<<>>\nendobj\ntrailer\n%%EOF\n"
+JPEG = b"\xff\xd8\xff\xe0\x00\x10JFIF" + b"\x00" * 20
+PNG = b"\x89PNG\r\n\x1a\n" + b"\x00" * 20
 
 
 def _file(data: bytes, filename: str | None = "facture.pdf", mime: str | None = "application/pdf"):
@@ -55,6 +57,42 @@ def test_mime_type_parameters_are_accepted() -> None:
     assert _save(PDF, mime="Application/PDF; charset=binary").size == len(PDF)
 
 
+# --- photos / scans (Gemini multimodal path, see gemini_adapter.py) -----------------------
+def test_valid_jpeg_is_stored_with_a_jpg_extension(upload_dir: Path) -> None:
+    stored = _save(JPEG, filename="photo.jpg", mime="image/jpeg")
+    assert re.fullmatch(r"[0-9a-f]{32}\.jpg", stored.path.name)
+    assert stored.mime == "image/jpeg"
+    assert stored.path.read_bytes() == JPEG
+
+
+def test_valid_png_is_stored_with_a_png_extension(upload_dir: Path) -> None:
+    stored = _save(PNG, filename="scan.png", mime="image/png")
+    assert re.fullmatch(r"[0-9a-f]{32}\.png", stored.path.name)
+    assert stored.mime == "image/png"
+
+
+def test_pdf_upload_still_reports_its_mime() -> None:
+    assert _save(PDF).mime == "application/pdf"
+
+
+@pytest.mark.parametrize(
+    ("data", "mime"),
+    [
+        (PDF, "image/jpeg"),  # right bytes for a PDF, declared as an image
+        (JPEG, "image/png"),  # a JPEG declared as a PNG
+        (PNG, "image/jpeg"),  # a PNG declared as a JPEG
+        (b"not an image at all", "image/jpeg"),
+        (b"not an image at all", "image/png"),
+    ],
+)
+def test_image_content_must_match_its_declared_type(
+    data: bytes, mime: str, upload_dir: Path
+) -> None:
+    with pytest.raises(InvalidUploadError):
+        _save(data, mime=mime)
+    assert _files_in(upload_dir) == []
+
+
 def test_file_exactly_at_the_size_limit_is_accepted(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("MAX_UPLOAD_SIZE_MB", "1")
     data = PDF + b"0" * (1024 * 1024 - len(PDF))
@@ -62,7 +100,9 @@ def test_file_exactly_at_the_size_limit_is_accepted(monkeypatch: pytest.MonkeyPa
 
 
 # --- rejections (and nothing left on disk) --------------------------------------------------
-@pytest.mark.parametrize("mime", ["text/html", "application/x-msdownload", "image/png", "", None])
+@pytest.mark.parametrize(
+    "mime", ["text/html", "application/x-msdownload", "image/webp", "image/gif", "", None]
+)
 def test_wrong_mime_type_is_rejected(mime: str | None, upload_dir: Path) -> None:
     with pytest.raises(InvalidUploadError):
         _save(PDF, mime=mime)

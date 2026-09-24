@@ -193,7 +193,7 @@ def test_security_headers_are_on_every_kind_of_response(client: TestClient, monk
 
 
 def test_security_headers_are_on_unexpected_errors_too(monkeypatch) -> None:
-    def boom(_path):
+    def boom(_path, _mime):
         raise RuntimeError("secret C:\\Users\\ibrahima\\data")
 
     monkeypatch.setattr(routes, "process_invoice", boom)
@@ -258,6 +258,34 @@ def test_uploading_the_same_pdf_twice_reuses_the_cache(
     assert len(client.get("/invoices", headers=AUTH).json()) == 2  # documented: two records
 
 
+JPEG = b"\xff\xd8\xff\xe0\x00\x10JFIF FAKE JPEG BYTES"
+
+
+def test_uploading_a_photo_goes_through_the_image_path_end_to_end(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Real upload validation, real route, real database — only the Gemini call is faked,
+    and it must be the image one (extract_invoice_data would be the wrong, OCR/text path)."""
+    calls: list[str] = []
+
+    def fake_image(image_bytes: bytes, mime: str, _source_file) -> ExtractedInvoice:
+        calls.append(mime)
+        assert image_bytes == JPEG
+        return GOOD
+
+    def _must_not_run(*_args, **_kwargs):
+        raise AssertionError("a photo upload must not go through the PDF/OCR text path")
+
+    monkeypatch.setattr(pipeline, "extract_invoice_data_from_image", fake_image)
+    monkeypatch.setattr(pipeline, "extract_invoice_data", _must_not_run)
+
+    response = _upload(client, JPEG, name="photo.jpg", mime="image/jpeg")
+
+    assert response.status_code == 201
+    assert calls == ["image/jpeg"]
+    assert response.json()["invoice"]["invoice_number"] == "F-2026-001"
+
+
 @pytest.mark.parametrize(
     ("data", "mime"),
     [(b"MZ\x90\x00 exe", "application/pdf"), (PDF, "text/html"), (b"", "application/pdf")],
@@ -299,7 +327,7 @@ def test_upload_without_a_file_is_a_422(client: TestClient) -> None:
 def test_pipeline_errors_become_safe_http_errors(
     client: TestClient, monkeypatch, upload_dir, error, status, message
 ) -> None:
-    def failing(_path):
+    def failing(_path, _mime):
         raise error
 
     monkeypatch.setattr(routes, "process_invoice", failing)
@@ -311,7 +339,7 @@ def test_pipeline_errors_become_safe_http_errors(
 
 def test_rate_limit_answers_429_with_retry_after(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("UPLOAD_RATE_LIMIT_PER_MINUTE", "2")
-    monkeypatch.setattr(routes, "process_invoice", lambda _path: GOOD)
+    monkeypatch.setattr(routes, "process_invoice", lambda _path, _mime: GOOD)
     with TestClient(create_app()) as limited:
         assert _upload(limited).status_code == 201
         assert _upload(limited).status_code == 201

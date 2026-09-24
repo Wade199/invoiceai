@@ -44,7 +44,7 @@ class FakeClient:
     def get(self, record_id: str) -> InvoiceView:  # the Result page loads the record
         return _view()
 
-    def upload(self, filename: str, data: bytes) -> InvoiceView:
+    def upload(self, filename: str, data: bytes, mime: str) -> InvoiceView:
         self.sent.append((filename, data))
         answer = self.answers.pop(0) if self.answers else _view()
         if isinstance(answer, Exception):
@@ -124,7 +124,7 @@ def test_a_file_that_is_not_a_pdf_is_skipped_without_a_request(
     app = _page(monkeypatch, client)
     _send(app, name="fake.pdf", data=b"MZ\x90\x00 an executable renamed .pdf")
     assert client.sent == []
-    assert "pas un PDF valide" in app.warning[0].value
+    assert "format non reconnu" in app.warning[0].value
 
 
 def test_a_refusal_by_the_api_is_shown_with_its_message_and_the_retry_delay(

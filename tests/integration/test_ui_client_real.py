@@ -36,7 +36,7 @@ def _config(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("API_TOKEN", TOKEN)
     monkeypatch.setenv("ALLOWED_HOSTS", "testserver")
     monkeypatch.setenv("MAX_UPLOAD_SIZE_MB", "1")
-    monkeypatch.setattr(routes, "process_invoice", lambda _path: _invoice())
+    monkeypatch.setattr(routes, "process_invoice", lambda _path, _mime: _invoice())
 
 
 @pytest.fixture
@@ -111,7 +111,7 @@ def test_hostile_extracted_text_reaches_the_ui_as_plain_data(
     api: ApiClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """The client does not interpret anything; escaping is the display layer's job (safe.py)."""
-    monkeypatch.setattr(routes, "process_invoice", lambda _path: _invoice(HOSTILE_SUPPLIER))
+    monkeypatch.setattr(routes, "process_invoice", lambda _path, _mime: _invoice(HOSTILE_SUPPLIER))
     created = api.upload("f.pdf", PDF)
     assert created.invoice.supplier == HOSTILE_SUPPLIER
     assert isinstance(created.invoice.supplier, str)

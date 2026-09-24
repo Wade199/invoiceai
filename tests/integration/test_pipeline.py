@@ -124,6 +124,64 @@ def test_a_cache_write_failure_does_not_lose_the_llm_answer(
     assert "could not be cached" in caplog.text
 
 
+# --- photo / scan path (no local OCR, Gemini gets the image directly) --------------------
+class _FakeImageGemini:
+    """Replaces extract_invoice_data_from_image; records what it was called with."""
+
+    def __init__(self, invoice: ExtractedInvoice) -> None:
+        self.invoice = invoice
+        self.calls: list[tuple[bytes, str]] = []
+
+    def __call__(self, image_bytes: bytes, mime: str, _source_file) -> ExtractedInvoice:
+        self.calls.append((image_bytes, mime))
+        return self.invoice
+
+
+def test_an_image_upload_uses_the_image_extractor_not_ocr(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    photo = tmp_path / "x.jpg"
+    photo.write_bytes(b"\xff\xd8\xff FAKE JPEG BYTES")
+    fake_image = _FakeImageGemini(_invoice(120.0))
+    monkeypatch.setattr(pipeline, "extract_invoice_data_from_image", fake_image)
+
+    def _must_not_run(*_args, **_kwargs):
+        raise AssertionError("the PDF/OCR text path must not run for an image upload")
+
+    monkeypatch.setattr(pipeline, "extract_text_from_pdf", _must_not_run)
+    monkeypatch.setattr(pipeline, "extract_invoice_data", _must_not_run)
+
+    result = pipeline.process_invoice(photo, "image/jpeg")
+
+    assert result.extraction_confidence == "high"
+    assert fake_image.calls == [(photo.read_bytes(), "image/jpeg")]
+
+
+def test_an_image_second_call_hits_cache_and_skips_gemini(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    photo = tmp_path / "scan.png"
+    photo.write_bytes(b"\x89PNG\r\n\x1a\n FAKE PNG BYTES")
+    fake_image = _FakeImageGemini(_invoice(120.0))
+    monkeypatch.setattr(pipeline, "extract_invoice_data_from_image", fake_image)
+
+    first = pipeline.process_invoice(photo, "image/png")
+    second = pipeline.process_invoice(photo, "image/png")
+
+    assert len(fake_image.calls) == 1
+    assert second == first
+
+
+def test_pdf_default_mime_is_unchanged_for_backward_compatibility(
+    sample_invoice_pdf: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Existing callers that only pass a path (no mime) must keep working as PDFs."""
+    fake = _FakeGemini(_invoice(120.0))
+    monkeypatch.setattr(pipeline, "extract_invoice_data", fake)
+    result = pipeline.process_invoice(sample_invoice_pdf)  # no mime argument
+    assert result.extraction_confidence == "high" and fake.calls == 1
+
+
 def test_a_missing_key_still_fails_before_the_llm_is_called(
     sample_invoice_pdf: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

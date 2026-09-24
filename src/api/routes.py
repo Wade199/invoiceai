@@ -43,7 +43,7 @@ router = APIRouter(dependencies=[Depends(require_token)])
 def _extract_and_store(upload: StoredUpload) -> StoredInvoice:
     """Blocking work (OCR process, Gemini call, database): runs in a worker thread."""
     pdf_hash = hash_pdf(upload.path)
-    invoice = process_invoice(upload.path)
+    invoice = process_invoice(upload.path, upload.mime)
     with session_scope() as session:
         return InvoiceRepository(session).create(
             invoice, pdf_hash=pdf_hash, display_name=upload.display_name
@@ -52,7 +52,7 @@ def _extract_and_store(upload: StoredUpload) -> StoredInvoice:
 
 @router.post("/invoices", status_code=201, response_model=InvoiceOut)
 async def create_invoice(request: Request, file: Annotated[UploadFile, File()]) -> InvoiceOut:
-    """Upload a PDF, extract and validate it, store the result. The PDF is not kept."""
+    """Upload a PDF, JPEG or PNG; extract, validate, store the result. The file is not kept."""
     state = request.app.state
     state.rate_limiter.check(client_key(request))
     with state.concurrency.slot():

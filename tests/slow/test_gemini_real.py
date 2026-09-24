@@ -60,3 +60,42 @@ def test_prompt_injection_does_not_change_the_extraction() -> None:
     invoice = _extract_or_skip(hostile)
     assert invoice.supplier == "Acme SARL" and invoice.total_ttc == 240.0
     assert os.environ["GOOGLE_API_KEY"] not in invoice.model_dump_json()
+
+
+# --- Photo / scan path (extract_invoice_data_from_image) — never exercised against the real
+# API elsewhere: every other test mocks _build_structured_llm, so the actual LangChain
+# multimodal message shape (HumanMessage with an "image_url" content block) is only proven
+# correct here, against the real SDK.
+def _synthetic_invoice_photo() -> bytes:
+    """A plain image with invoice text drawn on it — no fixture file needed."""
+    import io
+
+    from PIL import Image, ImageDraw
+
+    image = Image.new("RGB", (800, 400), "white")
+    draw = ImageDraw.Draw(image)
+    for y, line in enumerate(
+        [
+            "FACTURE INV-PHOTO-1",
+            "Date: 2026-03-15",
+            "Fournisseur: Acme SARL",
+            "Client: Dupont",
+            "Conseil  x2  100.00 HT chacun = 200.00 HT",
+            "Sous-total HT: 200.00 - TVA 20%: 40.00 - Total TTC: 240.00",
+        ]
+    ):
+        draw.text((20, 20 + y * 40), line, fill="black")
+    buffer = io.BytesIO()
+    image.save(buffer, format="PNG")
+    return buffer.getvalue()
+
+
+def test_provider_reads_a_photographed_invoice() -> None:
+    try:
+        invoice = gemini_adapter.extract_invoice_data_from_image(
+            _synthetic_invoice_photo(), "image/png", Path("photo.png")
+        )
+    except RateLimitError:
+        pytest.skip("Gemini free-tier quota exhausted for today")
+    assert invoice.invoice_number == "INV-PHOTO-1"
+    assert invoice.supplier == "Acme SARL" and invoice.total_ttc == 240.0

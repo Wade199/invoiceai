@@ -34,7 +34,7 @@ def _config(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("API_TOKEN", TOKEN)
     monkeypatch.setenv("ALLOWED_HOSTS", "testserver")
     monkeypatch.setenv("MAX_UPLOAD_SIZE_MB", "1")  # smaller than the UI's own 10 MB limit
-    monkeypatch.setattr(routes, "process_invoice", lambda _path: _invoice())
+    monkeypatch.setattr(routes, "process_invoice", lambda _path, _mime: _invoice())
 
 
 def _client(**env: str):

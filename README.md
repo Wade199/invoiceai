@@ -123,7 +123,8 @@ controls (see [`PROJECT_BRIEF.md`](PROJECT_BRIEF.md) §5):
 - LLM output validated against arithmetic consistency rules before being trusted
 - Quota handling on the Gemini free tier (measured: 20 requests/day/model) + SHA-256 encrypted cache
 
-Full checklist: [`docs/security/SECURITY_CHECKLIST.md`](docs/security/SECURITY_CHECKLIST.md)
+Full checklist: [`docs/security/SECURITY_CHECKLIST.md`](docs/security/SECURITY_CHECKLIST.md) ·
+Full audit (live attack testing, before going public): [`docs/security/SECURITY_AUDIT_2026-09-24.md`](docs/security/SECURITY_AUDIT_2026-09-24.md)
 
 ## Project docs
 

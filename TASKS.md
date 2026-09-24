@@ -7,7 +7,7 @@
 
 ## 🔥 En cours
 
-**P4 terminé** (UI + passe navigateur + captures + thème clair/sombre). Prochaine étape : finir P5 (tâche 16 — Docker + CI + repo public) ou retenter la tâche 19 (quota/503 Gemini) plus tard dans la journée.
+**P4 terminé** (UI + passe navigateur + captures + thème clair/sombre). Tâche 19 close. Prochaine étape : tâche 16 (Docker + CI + repo public) ou tâche 17 (test `slow` de `process_invoice`).
 
 ---
 
@@ -16,7 +16,6 @@
 | # | Tâche | Priorité | Dépendances | Estimation |
 |---|-------|----------|-------------|------------|
 | 16 | P5 — reste : Docker + CI + décider de rendre le repo GitHub public (README déjà fini, captures incluses) | Med | P1-P4 | 2-3j |
-| 19 | Rejouer `pytest -m slow` avec Gemini réel — **tenté le 2026-09-22 : 1 échec (503 « high demand », panne temporaire Google, géré correctement par le retry/`ProviderTimeoutError`) + 1 ignoré (quota épuisé après les retries)**. Pas un bug — à retenter plus tard dans la journée | Med | — | 0.25j |
 | 17 | Test `slow` de `process_invoice` sur l'API réelle (5 factures fictives) | Low | — | 0.5j |
 | 18 | Script CLI `scripts/test_ocr.py` (ex-tâche #8, optionnel) | Low | — | 0.5j |
 
@@ -42,6 +41,7 @@
 | — | Revue sécurité P2 v2, tag `v0.2.1` | 2026-09-20 | `docs/security/P2_SECURITY_REVIEW.md` ; test injection sur API réelle validé le 2026-09-21 |
 | 21 | Passe dans un vrai navigateur (P4) + captures d'écran pour le README | 2026-09-22 | Upload/Résultat/Historique/Export vérifiés ; facture hostile confirmée en texte littéral ; thème clair/sombre natif ajouté et vérifié |
 | 20 | Excel : formules neutralisées, confirmé pendant la passe navigateur (2026-09-21). `Host`/CORS testés en direct (2026-09-22) : `Host` usurpé → 400 (`TrustedHostMiddleware`, avant même la vérification du jeton) ; aucune route CORS déclarée → un navigateur bloquerait tout appel cross-origin authentifié (le preflight `OPTIONS` renvoie 405) | 2026-09-22 | — |
+| 19 | `pytest -m slow` avec Gemini réel — schéma accepté, injection de prompt sans effet (fournisseur/montant inchangés, clé API absente de la sortie). Échec du 2026-09-22 confirmé transitoire (503 Google) | 2026-09-24 | 2/2 tests passent, ~80s |
 
 ---
 

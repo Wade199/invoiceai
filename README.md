@@ -9,7 +9,9 @@ Portfolio project by [Ibrahima](https://github.com/) — Junior PHP/Symfony deve
 training to steer projects and pick up new stacks with AI as a copilot, not a
 replacement for learning.
 
-**Status**: ✅ API and Streamlit interface complete (extraction, encrypted storage, CSV export, 4 screens, 678 tests), verified in a real browser (light + dark theme, security checks). See [`PROJECT_BRIEF.md`](PROJECT_BRIEF.md) for the full spec.
+[![CI](https://github.com/Wade199/invoiceai/actions/workflows/ci.yml/badge.svg)](https://github.com/Wade199/invoiceai/actions/workflows/ci.yml)
+
+**Status**: ✅ API and Streamlit interface complete (extraction, encrypted storage, CSV export, 4 screens, 681 tests), verified in a real browser (light + dark theme, security checks) and in Docker. See [`PROJECT_BRIEF.md`](PROJECT_BRIEF.md) for the full spec.
 
 ---
 
@@ -72,9 +74,8 @@ The app ships a native light/dark theme (Streamlit's own `[theme.light]` /
 | Tests | `pytest` |
 | Lint/format | `ruff` |
 
-No Docker / CI in V1 — deliberately kept lean for a portfolio MVP (see
-[`PROJECT_BRIEF.md`](PROJECT_BRIEF.md) §4 and §9 for the reasoning). Both are
-planned for the P5 phase.
+Docker + CI added in P5 (kept out of V1 on purpose — see
+[`PROJECT_BRIEF.md`](PROJECT_BRIEF.md) §4 and §9 for the reasoning: a lean MVP first).
 
 ## Getting started
 
@@ -93,6 +94,16 @@ python -m pytest              # run tests
 # make api / make dev / make test are also available if `make` is installed
 python -m ruff check . && python -m ruff format --check .   # lint
 ```
+
+### Or with Docker
+
+```bash
+docker compose up --build     # needs a .env file (same as above), never baked into the image
+```
+
+Only the interface is published, to the host's own loopback (`127.0.0.1:8501`); the API is
+never reachable from outside the container. Data (SQLite DB + encrypted cache) persists in a
+named volume across restarts.
 
 ## Security & GDPR
 

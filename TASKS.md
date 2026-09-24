@@ -16,7 +16,7 @@
 | # | Tâche | Priorité | Dépendances | Estimation |
 |---|-------|----------|-------------|------------|
 | 16 | P5 — reste : Docker + CI + décider de rendre le repo GitHub public (README déjà fini, captures incluses) | Med | P1-P4 | 2-3j |
-| 17 | Test `slow` de `process_invoice` sur l'API réelle (5 factures fictives) | Low | — | 0.5j |
+| 17 | Test `slow` de `process_invoice` sur l'API réelle — **code écrit le 2026-09-24** (`tests/slow/test_pipeline_real.py`, 6 cas : les 5 factures fictives + un test de cache), suite rapide non cassée (678 tests). **Pas encore vérifié en vert** : quota journalier épuisé pendant l'exécution (`DailyQuotaExceededError`, même cause que la tâche 19 du 22/09) — à relancer après réinitialisation du quota | Low | — | 0.1j restant (juste relancer) |
 | 18 | Script CLI `scripts/test_ocr.py` (ex-tâche #8, optionnel) | Low | — | 0.5j |
 
 ---

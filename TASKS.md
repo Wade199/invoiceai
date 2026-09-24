@@ -7,7 +7,7 @@
 
 ## 🔥 En cours
 
-**P5 quasi terminé** : Docker, CI et `docs/architecture.md` faits et vérifiés (voir Terminé). **Reste** : décider si/quand le repo devient public (reporté par Ibrahima le 2026-09-24 — "pas encore, on en reparle plus tard"), puis tag `v1.0`.
+**P5 terminé — V1.0 publiée.** Repo public, tag `v1.0` posé. Reste seulement des tâches optionnelles (voir Backlog) et la tâche 17 à re-vérifier de bout en bout quand le quota Gemini le permettra.
 
 ---
 
@@ -15,7 +15,6 @@
 
 | # | Tâche | Priorité | Dépendances | Estimation |
 |---|-------|----------|-------------|------------|
-| 16b | Décider si/quand rendre le repo public, puis tag `v1.0` | Med | — | reporté (Ibrahima) |
 | 18 | Script CLI `scripts/test_ocr.py` (ex-tâche #8, optionnel) | Low | — | 0.5j |
 
 ---
@@ -43,6 +42,7 @@
 | 19 | `pytest -m slow` avec Gemini réel — schéma accepté, injection de prompt sans effet (fournisseur/montant inchangés, clé API absente de la sortie). Échec du 2026-09-22 confirmé transitoire (503 Google) | 2026-09-24 | 2/2 tests passent, ~80s |
 | 17 | `tests/slow/test_pipeline_real.py` (5 factures + 1 test de cache) — **validé sur preuve partielle** : `fake_invoice_01.pdf` a réussi 2 fois de suite en conditions réelles (le code du pipeline fonctionne). Les 4 autres factures + le test de cache n'ont pas pu tourner : quota Gemini épuisé **sur les 3 modèles testés** (`gemini-flash-latest`, `gemini-3.6-flash`, `gemini-3.1-pro-preview`) — la leçon du 18/09 (« quota par modèle ») semble fausse ou incomplète, le plafond journalier paraît global au projet/compte. Code inchangé, se vérifiera seul dès que le quota se recharge (aucune action requise) | 2026-09-24 | Ruff clean, 678 tests rapides toujours verts |
 | 16a | P5 — Docker (`Dockerfile`, `docker-compose.yml`, 1 seul conteneur car API+UI se parlent en `127.0.0.1`) + CI GitHub Actions (`ruff` + `pytest`, sans `-m slow`) + `docs/architecture.md` (2 diagrammes Mermaid). 2 vrais bugs trouvés et corrigés en testant (pas supposés) : `UI_HOST` ajouté dans `src/launcher.py` (un conteneur ne peut pas être atteint sur son propre `127.0.0.1` depuis l'extérieur — l'API reste verrouillée, seule l'UI est élargie) ; nettoyage d'erreur dans `src/api/upload.py` qui masquait l'erreur d'origine sous Linux (`NotADirectoryError` non filtrée par `missing_ok=True`), trouvé en testant dans un vrai conteneur Linux avant de pousser la CI. Ancien `docs/architecture_assistant_ia_factures.svg` (reliquat du brief V0 abandonné) supprimé, références corrigées | 2026-09-24 | CI vérifiée verte sur GitHub (`gh run watch`), pas juste en local ; conteneur Docker testé et ouvert dans un vrai navigateur |
+| 16b | Repo passé **public** (historique complet vérifié sans secret avant, `git log --all -S` sur tous les motifs de clés) + tag `v1.0` posé et poussé | 2026-09-24 | https://github.com/Wade199/invoiceai — V1.0 publiée |
 
 ---
 

@@ -86,7 +86,7 @@ assistant-ia-devis-factures/
 ├── docs/
 │   ├── adr/
 │   ├── security/
-│   └── architecture_assistant_ia_factures.svg
+│   └── architecture.md
 ├── .streamlit/config.toml
 ├── pyproject.toml
 ├── requirements.txt

@@ -5,7 +5,7 @@
 >
 > **Différent de** :
 > - `PROJECT_BRIEF.md` → le "pourquoi" (business, scope, contraintes)
-> - `docs/architecture_assistant_ia_factures.svg` → la vue macro (composants + flux)
+> - `docs/architecture.md` → la vue macro (composants + flux, diagrammes Mermaid)
 > - `docs/adr/` → les décisions structurantes (1 fichier = 1 décision)
 > - `docs/wireframes.md` → l'UI
 

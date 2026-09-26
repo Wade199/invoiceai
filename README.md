@@ -2,10 +2,10 @@
 
 # InvoiceAI
 
-> AI-powered extraction of structured data (supplier, dates, amounts, line items)
+> AI - powered extraction of structured data (supplier, dates, amounts, line items)
 > from PDF invoices and quotes, exported to CSV/Excel.
 
-Portfolio project by [Ibrahima](https://github.com/) — Junior PHP/Symfony developer,
+Portfolio project by [Ibrahima](https://github.com/) - Junior PHP/Symfony developer,
 training to steer projects and pick up new stacks with AI as a copilot, not a
 replacement for learning.
 
@@ -27,14 +27,14 @@ for consistency (LLMs hallucinate), and lets you export the result to CSV.
 <tr>
 <td width="50%">
 
-**Upload** — batch of PDFs, extraction progress
+**Upload** - batch of PDFs, extraction progress
 
 <img src="docs/screenshots/upload.png" alt="Upload screen">
 
 </td>
 <td width="50%">
 
-**Résultat** — editable form, reliability check
+**Résultat** - editable form, reliability check
 
 <img src="docs/screenshots/result.png" alt="Result screen">
 
@@ -43,14 +43,14 @@ for consistency (LLMs hallucinate), and lets you export the result to CSV.
 <tr>
 <td width="50%">
 
-**Historique** — filters, hostile content shown as plain text (no injection)
+**Historique** - filters, hostile content shown as plain text (no injection)
 
 <img src="docs/screenshots/history.png" alt="History screen">
 
 </td>
 <td width="50%">
 
-**Export** — CSV with formula-injection neutralised
+**Export** - CSV with formula-injection neutralised
 
 <img src="docs/screenshots/export.png" alt="Export screen">
 
@@ -59,7 +59,7 @@ for consistency (LLMs hallucinate), and lets you export the result to CSV.
 </table>
 
 The app ships a native light/dark theme (Streamlit's own `[theme.light]` /
-`[theme.dark]`, switchable from ⋮ → Settings → Theme) — no custom CSS.
+`[theme.dark]`, switchable from ⋮ → Settings → Theme) - no custom CSS.
 
 ## Stack (V1)
 
@@ -74,7 +74,7 @@ The app ships a native light/dark theme (Streamlit's own `[theme.light]` /
 | Tests | `pytest` |
 | Lint/format | `ruff` |
 
-Docker + CI added in P5 (kept out of V1 on purpose — see
+Docker + CI added in P5 (kept out of V1 on purpose - see
 [`PROJECT_BRIEF.md`](PROJECT_BRIEF.md) §4 and §9 for the reasoning: a lean MVP first).
 
 ## Getting started
@@ -129,12 +129,12 @@ Full audit (live attack testing, before going public): [`docs/security/SECURITY_
 ## Project docs
 
 - [`PROJECT_BRIEF.md`](PROJECT_BRIEF.md) — full V1.0 spec (source of truth)
-- [`docs/architecture.md`](docs/architecture.md) — components, request flow, deployment (Mermaid diagrams)
+- [`docs/architecture.md`](docs/architecture.md) - components, request flow, deployment (Mermaid diagrams)
 - [`PROJECT_CONTEXT.md`](PROJECT_CONTEXT.md) — living architecture/decisions doc
 - [`TASKS.md`](TASKS.md) — phase-by-phase backlog
-- [`DECISIONS.md`](DECISIONS.md) — decision log
-- [`docs/security/`](docs/security/) — security reviews per phase (P2, P3)
+- [`DECISIONS.md`](DECISIONS.md) - decision log
+- [`docs/security/`](docs/security/) - security reviews per phase (P2, P3)
 
 ## License
 
-Portfolio project — not licensed for commercial reuse.
+Portfolio project - not licensed for commercial reuse.
